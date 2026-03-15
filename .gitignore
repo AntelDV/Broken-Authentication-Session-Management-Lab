@@ -1,0 +1,25 @@
+# --- Biến môi trường  ---
+.env
+.env.*
+
+# --- Môi trường ảo Python ---
+venv/
+env/
+
+# --- Cache của Python ---
+__pycache__/
+*.pyc
+*.pyo
+
+# --- Database cục bộ ---
+*.db
+*.sqlite3
+data/
+
+# --- Cấu hình IDE  ---
+.vscode/
+.idea/
+
+# --- File rác của Hệ điều hành ---
+.DS_Store
+Thumbs.db

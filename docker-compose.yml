@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  # Tầng Cơ sở dữ liệu (MySQL) 
+  db:
+    image: mysql:8.0
+    container_name: auth-lab-db
+    restart: always
+    environment:
+      MYSQL_DATABASE: auth_lab_db
+      MYSQL_ROOT_PASSWORD: root_password_demo
+      MYSQL_USER: duong_admin
+      MYSQL_PASSWORD: secure_password_123
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+
+  # Tầng Ứng dụng
+  app:
+    build: .
+    container_name: auth-lab-app
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=mysql+pymysql://duong_admin:secure_password_123@db:3306/auth_lab_db
+      - AUTH_MODE=${AUTH_MODE:-vulnerable}
+    depends_on:
+      - db
+
+volumes:
+  db_data:
