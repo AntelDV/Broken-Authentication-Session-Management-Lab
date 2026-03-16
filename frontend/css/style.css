@@ -1,0 +1,132 @@
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: 'Consolas', 'Courier New', monospace; /* Đổi font chữ dạng code */
+}
+
+body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background-color: #0b0c10;
+    /* Hiệu ứng nền ánh sao đơn giản bằng radial-gradient */
+    background-image: 
+        radial-gradient(white, rgba(255,255,255,.2) 2px, transparent 40px),
+        radial-gradient(white, rgba(255,255,255,.15) 1px, transparent 30px),
+        radial-gradient(white, rgba(255,255,255,.1) 2px, transparent 40px);
+    background-size: 550px 550px, 350px 350px, 250px 250px;
+    background-position: 0 0, 40px 60px, 130px 270px;
+    color: #c5c6c7;
+}
+
+.login-container {
+    background-color: rgba(31, 40, 51, 0.85); /* Nền bán trong suốt */
+    padding: 40px 30px;
+    border-radius: 12px;
+    width: 100%;
+    max-width: 420px;
+    /* Hiệu ứng viền Neon Xanh - Hồng */
+    box-shadow: 0 0 15px rgba(102, 252, 241, 0.5), 
+                inset 0 0 10px rgba(102, 252, 241, 0.2);
+    border: 1px solid #66fcf1;
+    backdrop-filter: blur(5px);
+}
+
+h2 {
+    text-align: center;
+    margin-bottom: 25px;
+    color: #66fcf1;
+    text-shadow: 0 0 10px rgba(102, 252, 241, 0.7);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+}
+
+.input-group {
+    margin-bottom: 20px;
+}
+
+label {
+    display: block;
+    margin-bottom: 8px;
+    color: #45a29e;
+    font-size: 14px;
+    font-weight: bold;
+    letter-spacing: 1px;
+}
+
+input {
+    width: 100%;
+    padding: 12px;
+    background-color: #0b0c10;
+    border: 1px solid #45a29e;
+    border-radius: 6px;
+    font-size: 14px;
+    color: #66fcf1;
+    outline: none;
+    transition: all 0.3s ease;
+}
+
+input::placeholder {
+    color: #1f2833;
+}
+
+input:focus {
+    border-color: #66fcf1;
+    box-shadow: 0 0 8px rgba(102, 252, 241, 0.6);
+}
+
+button {
+    width: 100%;
+    padding: 12px;
+    background-color: transparent;
+    color: #66fcf1;
+    border: 2px solid #66fcf1;
+    border-radius: 6px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    margin-top: 15px;
+    letter-spacing: 1px;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+}
+
+button:hover {
+    background-color: #66fcf1;
+    color: #0b0c10;
+    box-shadow: 0 0 15px #66fcf1, 0 0 25px #66fcf1;
+}
+
+/* Kiểu dáng cho hộp thông báo */
+.message {
+    margin-top: 20px;
+    padding: 12px;
+    border-radius: 6px;
+    text-align: center;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.hidden {
+    display: none;
+}
+
+/* Lỗi màu đỏ Neon */
+.error {
+    background-color: rgba(255, 0, 60, 0.1);
+    color: #ff003c;
+    border: 1px solid #ff003c;
+    box-shadow: 0 0 10px rgba(255, 0, 60, 0.5);
+    text-shadow: 0 0 5px rgba(255, 0, 60, 0.5);
+}
+
+/* Thành công màu xanh Neon */
+.success {
+    background-color: rgba(0, 255, 136, 0.1);
+    color: #00ff88;
+    border: 1px solid #00ff88;
+    box-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+    text-shadow: 0 0 5px rgba(0, 255, 136, 0.5);
+}

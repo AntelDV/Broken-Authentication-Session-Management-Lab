@@ -9,3 +9,4 @@ SQLAlchemy
 aiohttp
 pymysql 
 cryptography
+pyotp
