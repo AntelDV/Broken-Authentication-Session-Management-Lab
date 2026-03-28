@@ -10,20 +10,32 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from src.config.settings import settings
 from src.security.rate_limit import check_rate_limit
+from src.config.database import SessionLocal
+from src.repositories.log_repository import LogRepository
+
+log_repo = LogRepository()
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        # Chỉ kích hoạt khi đang ở bản Vá lỗi (Secure) và là API Đăng nhập
         if request.url.path == "/api/auth/login" and settings.AUTH_MODE == "secure":
             client_ip = request.client.host
             
-            # Gọi thuật toán Token Bucket
             if not check_rate_limit(client_ip):
+                # [BLUE TEAM] - GHI LOG LẠI BẰNG CHỨNG TẤN CÔNG
+                db = SessionLocal()
+                try:
+                    log_repo.log_attack(
+                        db=db, 
+                        ip=client_ip, 
+                        attack_type="Brute-force / Rate Limit Exceeded",
+                        request_data=f"Target API: {request.url.path}"
+                    )
+                finally:
+                    db.close()
+
                 return JSONResponse(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    content={"detail": "Too Many Requests. Vượt quá số lần thử, vui lòng đợi."}
+                    content={"detail": "Too Many Requests. IP của bạn đã bị ghi log!"}
                 )
         
-        # Nếu còn lượt, cho phép Request đi tiếp vào bên trong
-        response = await call_next(request)
-        return response
+        return await call_next(request)

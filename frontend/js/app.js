@@ -20,6 +20,7 @@ document.getElementById('loginForm').addEventListener('submit', async function(e
             headers: {
                 'Content-Type': 'application/json'
             },
+            credentials: 'include',
             body: JSON.stringify({
                 username: usernameInput,
                 password: passwordInput
@@ -34,13 +35,19 @@ document.getElementById('loginForm').addEventListener('submit', async function(e
             messageBox.className = 'message success';
             messageBox.textContent = data.message;
             
-            // LƯU SESSION ID VÀ CHUYỂN TRANG
-            // Trong thực tế sẽ dùng Cookie bảo mật (HttpOnly), ở lab này ta dùng localStorage để dễ demo lỗi
-            localStorage.setItem('auth_session_id', data.session_id);
+            // Xử lý lưu trữ dựa trên Chế độ (Vulnerable / Secure)
+            if (data.session_id !== "[Đã được bảo mật trong HttpOnly Cookie]") {
+                // Chế độ VULNERABLE: Lưu hớ hênh ở localStorage
+                localStorage.setItem('auth_session_id', data.session_id);
+            } else {
+                // Chế độ SECURE: Xóa sạch localStorage. 
+                // Trình duyệt đã tự động giữ Cookie HttpOnly ngầm bên dưới.
+                localStorage.removeItem('auth_session_id');
+            }
+            
             localStorage.setItem('auth_role', data.role);
             localStorage.setItem('auth_username', usernameInput);
             
-            // Chuyển hướng sau 1 giây
             setTimeout(() => {
                 window.location.href = 'dashboard.html';
             }, 1000);
