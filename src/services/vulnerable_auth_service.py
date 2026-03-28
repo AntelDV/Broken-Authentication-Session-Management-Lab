@@ -9,34 +9,79 @@
 # 4. Session Fixation: Khi login thành công, không tạo session_id mới mà dùng lại session cũ do client gửi lên.
 # 5. Rate Limit: Bỏ qua hoàn toàn, cho phép gọi API liên tục.
 
+import hashlib
+from datetime import datetime, timedelta
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
+
 from src.services.base_auth_service import BaseAuthService
-from src.schemas.request.login_request import LoginRequest
+from src.schemas.request.login_request import LoginRequest, MFAVerifyRequest, ForgotPasswordRequest, ResetPasswordRequest
 from src.schemas.response.auth_response import AuthResponse
 from src.repositories.user_repository import UserRepository
-from src.utils.hash_util import verify_md5
+from src.repositories.token_repository import TokenRepository
+from src.utils.hash_util import verify_md5, hash_md5
+from src.security.auth_provider import generate_mfa_secret, get_provisioning_uri, verify_mfa_token
 
 class VulnerableAuthService(BaseAuthService):
     def __init__(self):
         self.user_repo = UserRepository()
+        self.token_repo = TokenRepository()
 
     def login(self, db: Session, request: LoginRequest) -> AuthResponse:
         user = self.user_repo.get_by_username(db, request.username)
-        
-        # LỖI 1: Trả về lỗi chi tiết "Tài khoản không tồn tại" (Giúp Hacker dò User)
         if not user:
             raise HTTPException(status_code=404, detail="Tài khoản không tồn tại")
-
-        # LỖI 2: Dùng MD5 để kiểm tra mật khẩu (Yếu, dễ crack)
         if not verify_md5(request.password, user.password_hash):
             raise HTTPException(status_code=401, detail="Sai mật khẩu")
 
-        # LỖI 3: Session Fixation (Giả lập việc dùng lại 1 Session ID tĩnh, không an toàn)
         fake_vulnerable_session = f"session_of_{user.username}_static"
+        return AuthResponse(message="Đăng nhập thành công (Vulnerable Mode)", session_id=fake_vulnerable_session, role=user.role.value)
 
-        return AuthResponse(
-            message="Đăng nhập thành công (Vulnerable Mode)",
-            session_id=fake_vulnerable_session,
-            role=user.role.value
-        )
+    def setup_mfa(self, db: Session, username: str) -> dict:
+        user = self.user_repo.get_by_username(db, username)
+        if not user:
+            raise HTTPException(status_code=404, detail="User không tồn tại")
+        if not user.mfa_secret:
+            user.mfa_secret = generate_mfa_secret()
+            db.commit()
+        return {
+            "message": "Vui lòng nhập đoạn mã Secret này vào Google Authenticator hoặc quét mã QR.",
+            "secret": user.mfa_secret,
+            "qr_uri": get_provisioning_uri(user.username, user.mfa_secret)
+        }
+
+    def verify_mfa(self, db: Session, request: MFAVerifyRequest) -> dict:
+        user = self.user_repo.get_by_username(db, request.username)
+        if not user or not user.mfa_secret:
+            raise HTTPException(status_code=400, detail="MFA chưa được thiết lập cho tài khoản này.")
+        if verify_mfa_token(user.mfa_secret, request.otp_token):
+            user.is_mfa_enabled = True
+            db.commit()
+            return {"message": "✅ Xác thực MFA thành công!"}
+        raise HTTPException(status_code=401, detail="❌ Mã OTP không chính xác.")
+
+    def forgot_password(self, db: Session, request: ForgotPasswordRequest) -> dict:
+        user = self.user_repo.get_by_username(db, request.username)
+        if not user:
+            return {"message": "Nếu tài khoản tồn tại, email khôi phục sẽ được gửi."}
+            
+        # Token MD5 dễ đoán và sống 10 năm
+        reset_token = hashlib.md5(user.username.encode()).hexdigest()
+        self.token_repo.create_token(db, user.id, reset_token, datetime.now() + timedelta(days=3650))
+        
+        print(f"[EMAIL MOCK] Link khôi phục: http://127.0.0.1:8000/reset?token={reset_token}")
+        return {"message": "Nếu tài khoản tồn tại, email khôi phục sẽ được gửi.", "token_khuyen_mai_de_demo": reset_token}
+
+    def reset_password(self, db: Session, request: ResetPasswordRequest) -> dict:
+        token_record = self.token_repo.get_token(db, request.token)
+        if not token_record:
+            raise HTTPException(status_code=400, detail="Token không hợp lệ.")
+            
+        # Không kiểm tra hết hạn, không kiểm tra is_used, băm MD5
+        user = self.user_repo.get_by_username(db, "admin") # Lấy tạm từ DB
+        for u in db.query(user.__class__).all(): # Fix nhanh query
+            if u.id == token_record.user_id: user = u
+            
+        user.password_hash = hash_md5(request.new_password)
+        self.token_repo.mark_used(db, token_record)
+        return {"message": "Mật khẩu đã được đặt lại thành công!"}
