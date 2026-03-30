@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 class LoginRequest(BaseModel):
     username: str = Field(..., min_length=3, description="Tên đăng nhập")
     password: str = Field(..., min_length=5, description="Mật khẩu chưa mã hóa")
+    remember_me: bool = Field(False, description="Tích vào ô Ghi nhớ đăng nhập")
 
 class MFAVerifyRequest(BaseModel):
     username: str

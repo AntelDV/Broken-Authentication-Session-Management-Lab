@@ -36,20 +36,42 @@ class VulnerableAuthService(BaseAuthService):
         if user.is_locked:
             raise HTTPException(status_code=401, detail="Tài khoản đã bị khóa do nhập sai quá nhiều lần!")
 
-        if not verify_md5(request.password, user.password_hash):
-            # Tăng biến đếm nhập sai
+        from src.utils.hash_util import verify_bcrypt, verify_md5
+        is_pass_valid = False
+        try:
+            is_pass_valid = verify_md5(request.password, user.password_hash) or verify_bcrypt(request.password, user.password_hash)
+        except:
+            is_pass_valid = verify_md5(request.password, user.password_hash)
+
+        if not is_pass_valid:
             attempts = user.failed_login_attempts + 1
-            is_locked = attempts >= 5 # Sai 5 lần thì khóa
-            self.user_repo.update_failed_attempts(db, user, attempts, is_locked)
-            
+            self.user_repo.update_failed_attempts(db, user, attempts, attempts >= 5)
             raise HTTPException(status_code=401, detail="Sai mật khẩu")
 
-        # Đăng nhập đúng -> Reset đếm sai về 0
         self.user_repo.update_failed_attempts(db, user, 0, False)
+        
+        fake_vulnerable_session = f"session_of_{user.username}_static"
+        
+        # Ghép Username và Hash MD5 nhét thẳng vào Cookie
+        import base64
+        from src.utils.hash_util import hash_md5
+        remember_cookie = None
+        if request.remember_me:
+            # Hacker bắt được cục này sẽ giải mã Base64 và đem MD5 đi crack offline
+            raw_cookie = f"{user.username}:{hash_md5(request.password)}"
+            remember_cookie = base64.b64encode(raw_cookie.encode()).decode('utf-8')
 
         fake_vulnerable_session = f"session_of_{user.username}_static"
-        return AuthResponse(message="Đăng nhập thành công (Vulnerable Mode)", session_id=fake_vulnerable_session, role=user.role.value)
-
+        return AuthResponse(
+            message="Đăng nhập thành công (Vulnerable Mode)", 
+            session_id=fake_vulnerable_session, 
+            role=user.role.value,
+            require_mfa=user.is_mfa_enabled,
+            temp_token=user.username if user.is_mfa_enabled else None,
+            remember_cookie=remember_cookie 
+        )
+        
+        
     def setup_mfa(self, db: Session, username: str) -> dict:
         user = self.user_repo.get_by_username(db, username)
         if not user:

@@ -29,27 +29,38 @@ class SecureAuthService(BaseAuthService):
         generic_error = HTTPException(status_code=401, detail="Tài khoản hoặc mật khẩu không chính xác")
 
         try:
-            if not user:
-                raise generic_error
-                
-            if user.is_locked:
+            if not user or user.is_locked:
                 raise generic_error
 
             if not verify_bcrypt(request.password, user.password_hash):
-                # Tăng biến đếm nhập sai và khóa nếu quá 5 lần
                 attempts = user.failed_login_attempts + 1
-                is_locked = attempts >= 5
-                self.user_repo.update_failed_attempts(db, user, attempts, is_locked)
+                self.user_repo.update_failed_attempts(db, user, attempts, attempts >= 5)
                 raise generic_error
                 
-            # Đăng nhập đúng -> Reset đếm sai về 0
             self.user_repo.update_failed_attempts(db, user, 0, False)
-
         except UnknownHashError:
             raise generic_error
 
-        return AuthResponse(message="Đăng nhập thành công (Secure Mode)", session_id=str(uuid.uuid4()), role=user.role.value)
+        import secrets
+        remember_cookie = None
+        if request.remember_me:
+            remember_cookie = secrets.token_urlsafe(64)
 
+        if user.is_mfa_enabled:
+            return AuthResponse(
+                message="Vui lòng nhập mã OTP để hoàn tất đăng nhập.",
+                require_mfa=True,
+                temp_token=user.username
+            )
+
+        return AuthResponse(
+            message="Đăng nhập thành công (Secure Mode)", 
+            session_id=str(uuid.uuid4()), 
+            role=user.role.value,
+            remember_cookie=remember_cookie
+        )
+    
+    
     def setup_mfa(self, db: Session, username: str) -> dict:
         user = self.user_repo.get_by_username(db, username)
         if not user: raise HTTPException(status_code=404, detail="User không tồn tại")
@@ -66,10 +77,17 @@ class SecureAuthService(BaseAuthService):
         user = self.user_repo.get_by_username(db, request.username)
         if not user or not user.mfa_secret:
             raise HTTPException(status_code=400, detail="MFA chưa được thiết lập cho tài khoản này.")
+            
         if verify_mfa_token(user.mfa_secret, request.otp_token):
             user.is_mfa_enabled = True
             db.commit()
-            return {"message": "✅ Xác thực MFA thành công!"}
+            
+            return {
+                "message": "✅ Xác thực MFA thành công!",
+                "session_id": str(uuid.uuid4()),
+                "role": user.role.value
+            }
+            
         raise HTTPException(status_code=401, detail="❌ Mã OTP không chính xác.")
 
     def forgot_password(self, db: Session, request: ForgotPasswordRequest) -> dict:

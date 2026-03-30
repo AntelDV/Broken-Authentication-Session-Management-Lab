@@ -23,28 +23,30 @@ def get_auth_service():
 @router.post("/login", response_model=AuthResponse)
 def login(
     request_data: LoginRequest, 
-    response: Response, # Thêm tham số này để can thiệp Cookie
+    response: Response, 
     db: Session = Depends(get_db),
     auth_service = Depends(get_auth_service)
 ):
-    """
-    API Đăng nhập (Có hỗ trợ HttpOnly Cookie)
-    """
     auth_result = auth_service.login(db, request_data)
     
-    if settings.AUTH_MODE == "secure":
-        # Nhét Session ID vào HttpOnly Cookie
+    # Cài Session Cookie
+    if settings.AUTH_MODE == "secure" and auth_result.session_id:
         response.set_cookie(
-            key="auth_session_id",
-            value=auth_result.session_id,
-            httponly=True,  
-            secure=False,   
-            samesite="lax", 
-            max_age=3600    
+            key="auth_session_id", value=auth_result.session_id,
+            httponly=True, secure=False, samesite="lax", max_age=3600    
         )
-        # Giấu Session ID khỏi Body JSON 
         auth_result.session_id = "[Đã được bảo mật trong HttpOnly Cookie]"
         
+    # Cài Remember Me Cookie 
+    if auth_result.remember_cookie:
+        response.set_cookie(
+            key="remember_me", value=auth_result.remember_cookie,
+            httponly=True, secure=False, samesite="lax", max_age=30*24*3600    
+        )
+
+        if settings.AUTH_MODE == "secure":
+            auth_result.remember_cookie = "[Bảo mật: Chuỗi ngẫu nhiên an toàn]"
+            
     return auth_result
 
 @router.post("/mfa/setup")
@@ -52,8 +54,18 @@ def setup_mfa(username: str, db: Session = Depends(get_db), auth_service = Depen
     return auth_service.setup_mfa(db, username)
 
 @router.post("/mfa/verify")
-def verify_mfa(request: MFAVerifyRequest, db: Session = Depends(get_db), auth_service = Depends(get_auth_service)):
-    return auth_service.verify_mfa(db, request)
+def verify_mfa(request: MFAVerifyRequest, response: Response, db: Session = Depends(get_db), auth_service = Depends(get_auth_service)):
+    result = auth_service.verify_mfa(db, request)
+    
+    # Bắt lấy session_id vừa được sinh ra sau khi verify thành công và nhét vào Cookie
+    if settings.AUTH_MODE == "secure" and result.get("session_id"):
+        response.set_cookie(
+            key="auth_session_id", value=result["session_id"],
+            httponly=True, secure=False, samesite="lax", max_age=3600
+        )
+        result["session_id"] = "[Đã được bảo mật trong HttpOnly Cookie]"
+        
+    return result
 
 @router.post("/password/forgot")
 def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db), auth_service = Depends(get_auth_service)):

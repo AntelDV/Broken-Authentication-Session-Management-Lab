@@ -7,12 +7,14 @@ import aiohttp
 import time
 
 URL = "http://127.0.0.1:8000/api/auth/login"
-TOTAL_REQUESTS = 200  # Số lượng request muốn bắn
+TOTAL_REQUESTS = 1000  # Số lượng request muốn bắn
 
-async def fetch(session, username, password):
+async def fetch(session, username, password, fake_ip):
     payload = {"username": username, "password": password}
-    # Gửi request không chờ đợi (Bắn dồn dập)
-    async with session.post(URL, json=payload) as response:
+    
+    headers = {"X-Forwarded-For": fake_ip}
+    
+    async with session.post(URL, json=payload, headers=headers) as response:
         return response.status
 
 async def main():
@@ -20,14 +22,13 @@ async def main():
     print(f"Mục tiêu: {URL}\n")
     
     tasks = []
-    # connector=aiohttp.TCPConnector(limit=100) giúp bắn 100 request đồng thời
-    async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(limit=100)) as session:
-        # Tạo danh sách tài khoản giả mạo
+    # bắn 100 request đồng thời
+    async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(limit=1000)) as session:
         for i in range(TOTAL_REQUESTS):
-            tasks.append(fetch(session, f"hacker_{i}", f"pass_{i}"))
+            # Truyền thêm fake_ip (mỗi request 1 IP khác nhau: 10.0.0.1, 10.0.0.2...)
+            tasks.append(fetch(session, f"hacker_{i}", f"pass_{i}", f"10.0.0.{i}"))
             
         start_time = time.time()
-        # Kích hoạt bắn tất cả cùng lúc
         results = await asyncio.gather(*tasks)
         end_time = time.time()
         
@@ -47,8 +48,9 @@ async def main():
             print(f"  - Code {status}: {count} requests")
 
 if __name__ == "__main__":
-    # Để chạy được trên Windows/Linux không bị lỗi Event Loop
     import sys
     if sys.platform == 'win32':
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     asyncio.run(main())
+    
+    
