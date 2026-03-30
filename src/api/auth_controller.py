@@ -12,6 +12,7 @@ from src.config.database import get_db
 
 from src.services.vulnerable_auth_service import VulnerableAuthService
 from src.services.secure_auth_service import SecureAuthService
+from src.schemas.request.login_request import GoogleSSORequest
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
@@ -74,3 +75,23 @@ def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db
 @router.post("/password/reset")
 def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db), auth_service = Depends(get_auth_service)):
     return auth_service.reset_password(db, request)
+
+# SSO
+@router.post("/sso/google", response_model=AuthResponse)
+def google_sso_login(
+    request: GoogleSSORequest, 
+    db: Session = Depends(get_db), 
+    auth_service = Depends(get_auth_service)
+):
+    return auth_service.google_sso_login(db, request)
+
+@router.get("/mock-google-token/{email}")
+def get_mock_google_token(email: str):
+    """
+    giả lập máy chủ Google, 
+    trả về 1 ID Token có chữ ký hợp lệ cho email bạn nhập vào.
+    """
+    from src.security.jwt_handler import create_access_token
+    # Nhét email vào Payload và ký
+    token = create_access_token(data={"email": email, "iss": "accounts.google.com"})
+    return {"google_id_token": token}

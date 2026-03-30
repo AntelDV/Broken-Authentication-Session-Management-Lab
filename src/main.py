@@ -1,21 +1,21 @@
+import os
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
-import os
 
 from src.config.settings import settings
 from src.config.security_config import setup_cors
 from src.api.auth_controller import router as auth_router
-
+from src.api.admin_controller import router as admin_router
 from src.middlewares.timing_middleware import TimingMiddleware
 from src.middlewares.rate_limit_middleware import RateLimitMiddleware
 
-from src.api.admin_controller import router as admin_router
-
 app = FastAPI(title=settings.APP_NAME)
+
+# Cấu hình CORS
 setup_cors(app)
 
-# Gắn Middleware
+# Middleware 
 app.add_middleware(RateLimitMiddleware)
 app.add_middleware(TimingMiddleware)
 
@@ -23,18 +23,24 @@ app.add_middleware(TimingMiddleware)
 app.include_router(auth_router)
 app.include_router(admin_router)
 
-# Dịch chuyển API kiểm tra sức khỏe hệ thống sang đường dẫn khác
-@app.get("/api/health")
+@app.get("/api/health", tags=["System"])
 def health_check():
     return {"status": "running", "current_mode": settings.AUTH_MODE}
 
-# Xác định đường dẫn tới thư mục frontend 
-frontend_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
+# File Static
+frontend_path = os.path.join(os.getcwd(), "frontend")
 
-# Gắn toàn bộ thư mục frontend vào đường dẫn /app
-app.mount("/app", StaticFiles(directory=frontend_path, html=True), name="frontend")
+# Gắn thư mục css và js
+app.mount("/css", StaticFiles(directory=os.path.join(frontend_path, "css")), name="css")
+app.mount("/js", StaticFiles(directory=os.path.join(frontend_path, "js")), name="js")
 
-# Khi truy cập link gốc (http://127.0.0.1:8000), tự động chuyển hướng vào giao diện
-@app.get("/")
-def root():
-    return RedirectResponse(url="/app/index.html")
+# Định tuyến cho các trang HTML
+@app.get("/", include_in_schema=False)
+async def read_index():
+    from fastapi.responses import FileResponse
+    return FileResponse(os.path.join(frontend_path, "index.html"))
+
+@app.get("/dashboard.html", include_in_schema=False)
+async def read_dashboard():
+    from fastapi.responses import FileResponse
+    return FileResponse(os.path.join(frontend_path, "dashboard.html"))

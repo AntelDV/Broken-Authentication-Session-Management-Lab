@@ -12,12 +12,16 @@ from sqlalchemy.orm import Session
 from passlib.exc import UnknownHashError
 
 from src.services.base_auth_service import BaseAuthService
-from src.schemas.request.login_request import LoginRequest, MFAVerifyRequest, ForgotPasswordRequest, ResetPasswordRequest
-from src.schemas.response.auth_response import AuthResponse
 from src.repositories.user_repository import UserRepository
 from src.repositories.token_repository import TokenRepository
 from src.utils.hash_util import verify_bcrypt, hash_bcrypt
 from src.security.auth_provider import generate_mfa_secret, get_provisioning_uri, verify_mfa_token
+
+from src.security.jwt_handler import create_access_token
+
+from src.schemas.request.login_request import LoginRequest, MFAVerifyRequest, ForgotPasswordRequest, ResetPasswordRequest, GoogleSSORequest
+from src.schemas.response.auth_response import AuthResponse
+from src.models.user import User
 
 class SecureAuthService(BaseAuthService):
     def __init__(self):
@@ -50,14 +54,22 @@ class SecureAuthService(BaseAuthService):
             return AuthResponse(
                 message="Vui lòng nhập mã OTP để hoàn tất đăng nhập.",
                 require_mfa=True,
-                temp_token=user.username
+                temp_token=user.username,
+                remember_cookie=remember_cookie
             )
 
+        # Sinh JWT Token thực tế chứa thông tin User
+        access_token = create_access_token(
+            data={"sub": user.username, "role": user.role.value}
+        )
+
         return AuthResponse(
-            message="Đăng nhập thành công (Secure Mode)", 
-            session_id=str(uuid.uuid4()), 
+            message="Đăng nhập thành công", 
+            session_id=fake_vulnerable_session, 
             role=user.role.value,
-            remember_cookie=remember_cookie
+            remember_cookie=remember_cookie,
+            access_token=access_token,   # <-- Cấp JWT
+            token_type="bearer"          # <-- OAuth2
         )
     
     
@@ -82,9 +94,14 @@ class SecureAuthService(BaseAuthService):
             user.is_mfa_enabled = True
             db.commit()
             
+            # Cấp JWT xịn sau khi đã nhập đúng OTP
+            from src.security.jwt_handler import create_access_token
+            access_token = create_access_token(data={"sub": user.username, "role": user.role.value})
+            
             return {
                 "message": "✅ Xác thực MFA thành công!",
-                "session_id": str(uuid.uuid4()),
+                "access_token": access_token,
+                "token_type": "bearer",
                 "role": user.role.value
             }
             
@@ -95,7 +112,7 @@ class SecureAuthService(BaseAuthService):
         if not user:
             return {"message": "Nếu tài khoản tồn tại, email khôi phục sẽ được gửi."}
             
-        # 🛡️ BẢN AN TOÀN: Sinh chuỗi ngẫu nhiên 32 byte cực mạnh, sống 15 phút
+        # Sinh chuỗi ngẫu nhiên sống 15 phút
         reset_token = secrets.token_urlsafe(32)
         self.token_repo.create_token(db, user.id, reset_token, datetime.now() + timedelta(minutes=15))
         
@@ -107,7 +124,6 @@ class SecureAuthService(BaseAuthService):
         if not token_record:
             raise HTTPException(status_code=400, detail="Token không hợp lệ.")
             
-        # 🛡️ BẢN AN TOÀN kiểm tra tính hợp lệ khắt khe:
         if token_record.is_used:
             raise HTTPException(status_code=400, detail="Token này đã được sử dụng rồi.")
         if datetime.now() > token_record.expires_at:
@@ -120,3 +136,27 @@ class SecureAuthService(BaseAuthService):
         user.password_hash = hash_bcrypt(request.new_password)
         self.token_repo.mark_used(db, token_record)
         return {"message": "Mật khẩu đã được đặt lại thành công!"}
+    
+
+    def google_sso_login(self, db: Session, request: GoogleSSORequest) -> AuthResponse:
+        try:
+            # mô phỏng bằng hàm verify JWT 
+            from src.security.jwt_handler import verify_jwt_token
+            payload = verify_jwt_token(request.google_id_token)
+            verified_email = payload.get("email") # Lấy email được phong ấn trong token
+        except Exception:
+            raise HTTPException(status_code=401, detail="Google Token không hợp lệ hoặc giả mạo!")
+
+        user = db.query(User).filter(User.email == verified_email).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="Email không tồn tại trong hệ thống")
+
+        from src.security.jwt_handler import create_access_token
+        access_token = create_access_token(data={"sub": user.username, "role": user.role.value})
+        
+        return AuthResponse(
+            message="Đăng nhập SSO thành công", 
+            role=user.role.value,
+            access_token=access_token,
+            token_type="bearer"
+        )

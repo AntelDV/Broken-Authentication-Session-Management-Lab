@@ -1,7 +1,5 @@
-# WORKFLOW: Các API chỉ dành cho Admin. 
-# MỤC ĐÍCH: Dùng để test tính năng phân quyền hoặc biểu diễn lỗi cướp phiên (Hijacking) rồi truy cập trái phép.
-
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials # Bổ sung HTTPBearer
 from sqlalchemy.orm import Session
 from typing import List
 
@@ -9,47 +7,40 @@ from src.config.settings import settings
 from src.config.database import get_db
 from src.models.user import User
 from src.schemas.response.user_profile_response import UserProfileResponse
+from src.security.jwt_handler import verify_jwt_token
 
-router = APIRouter(prefix="/api/admin", tags=["Admin (Broken Access Control)"])
+router = APIRouter(prefix="/api/admin", tags=["Admin (Modern JWT Auth)"])
+
+security = HTTPBearer(auto_error=False)
 
 @router.get("/users", response_model=List[UserProfileResponse])
 def get_all_users(
-    # Bắt buộc Client phải gửi Session ID qua Header để chứng minh đã đăng nhập
-    x_session_id: str = Header(None, description="Session ID lấy từ lúc Login"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    credentials: HTTPAuthorizationCredentials = Depends(security) 
 ):
-    if not x_session_id:
-        raise HTTPException(status_code=401, detail="Vui lòng đăng nhập (Thiếu Session ID)")
+    if not credentials:
+        raise HTTPException(
+            status_code=401, 
+            detail="Yêu cầu xác thực. Vui lòng cung cấp Bearer Token."
+        )
+        
+    # Trích xuất chuỗi token từ Header
+    token = credentials.credentials
 
-    # TRÍCH XUẤT THÔNG TIN TỪ SESSION 
-    # Vì ở bản Vulnerable ta tạo session có dạng: "session_of_tenuser_static"
-    username = ""
-    if x_session_id.startswith("session_of_") and x_session_id.endswith("_static"):
-        username = x_session_id.replace("session_of_", "").replace("_static", "")
-    else:
-        # Ở bản Secure, Session ID là chuỗi UUID ngẫu nhiên.
-        # Đáng lý phải soi DB để tìm, nhưng để demo gọn ta chặn luôn ở đây.
-        raise HTTPException(status_code=401, detail="Session không hợp lệ hoặc đã hết hạn (Secure Mode)")
+    # Xác thực JWT Token
+    payload = verify_jwt_token(token)
+    username = payload.get("sub")
+    user_role = payload.get("role")
 
-    # Lấy thông tin user đang gửi Request
-    current_user = db.query(User).filter(User.username == username).first()
-    if not current_user:
-        raise HTTPException(status_code=401, detail="User không tồn tại")
+    if not username:
+        raise HTTPException(status_code=401, detail="Cấu trúc Token không hợp lệ.")
 
-    # KIỂM TRA PHÂN QUYỀN 
-    if settings.AUTH_MODE == "vulnerable":
-        # Chỉ cần có tài khoản (đã login) là cho xem hết!
-        # Hoàn toàn bỏ qua việc kiểm tra: current_user.role == "admin"
-        pass
-    else:
-        # Phải soi đúng Role mới cho vào!
-        if current_user.role.value != "admin":
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Truy cập bị từ chối! Bạn không có quyền Quản trị viên."
-            )
+    # Kiểm tra phân quyền 
+    if user_role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Truy cập bị từ chối! Yêu cầu quyền Quản trị viên."
+        )
 
-    
-    # Lấy toàn bộ người dùng trong hệ thống
-    all_users = db.query(User).all()
-    return all_users
+    # Nếu qua được khiên, trả về toàn bộ Database
+    return db.query(User).all()

@@ -15,12 +15,16 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from src.services.base_auth_service import BaseAuthService
-from src.schemas.request.login_request import LoginRequest, MFAVerifyRequest, ForgotPasswordRequest, ResetPasswordRequest
-from src.schemas.response.auth_response import AuthResponse
 from src.repositories.user_repository import UserRepository
 from src.repositories.token_repository import TokenRepository
 from src.utils.hash_util import verify_md5, hash_md5
 from src.security.auth_provider import generate_mfa_secret, get_provisioning_uri, verify_mfa_token
+
+from src.security.jwt_handler import create_access_token
+
+from src.schemas.request.login_request import LoginRequest, MFAVerifyRequest, ForgotPasswordRequest, ResetPasswordRequest, GoogleSSORequest
+from src.schemas.response.auth_response import AuthResponse
+from src.models.user import User
 
 class VulnerableAuthService(BaseAuthService):
     def __init__(self):
@@ -62,15 +66,21 @@ class VulnerableAuthService(BaseAuthService):
             remember_cookie = base64.b64encode(raw_cookie.encode()).decode('utf-8')
 
         fake_vulnerable_session = f"session_of_{user.username}_static"
-        return AuthResponse(
-            message="Đăng nhập thành công (Vulnerable Mode)", 
-            session_id=fake_vulnerable_session, 
-            role=user.role.value,
-            require_mfa=user.is_mfa_enabled,
-            temp_token=user.username if user.is_mfa_enabled else None,
-            remember_cookie=remember_cookie 
-        )
         
+        
+        # Sinh JWT Token thực tế chứa thông tin User
+        access_token = create_access_token(
+            data={"sub": user.username, "role": user.role.value}
+        )
+
+        return AuthResponse(
+            message="Đăng nhập thành công", 
+            session_id=fake_vulnerable_session,
+            role=user.role.value,
+            remember_cookie=remember_cookie,
+            access_token=access_token,   # <-- Cấp JWT
+            token_type="bearer"          # <-- OAuth2
+        )
         
     def setup_mfa(self, db: Session, username: str) -> dict:
         user = self.user_repo.get_by_username(db, username)
@@ -120,3 +130,19 @@ class VulnerableAuthService(BaseAuthService):
         user.password_hash = hash_md5(request.new_password)
         self.token_repo.mark_used(db, token_record)
         return {"message": "Mật khẩu đã được đặt lại thành công!"}
+    
+    def google_sso_login(self, db: Session, request: GoogleSSORequest) -> AuthResponse:
+        user = db.query(User).filter(User.email == request.email).first()
+        
+        if not user:
+            raise HTTPException(status_code=404, detail="Email không tồn tại trong hệ thống")
+
+        from src.security.jwt_handler import create_access_token
+        access_token = create_access_token(data={"sub": user.username, "role": user.role.value})
+        
+        return AuthResponse(
+            message="Đăng nhập SSO thành công", 
+            role=user.role.value,
+            access_token=access_token,
+            token_type="bearer"
+        )

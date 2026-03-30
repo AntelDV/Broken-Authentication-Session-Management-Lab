@@ -3,49 +3,48 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard - Auth Lab</title>
+    <title>Dashboard - Security Lab</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
-<body>
-    <div class="login-container" style="max-width: 600px;">
-        <h2>Khu Vực Quản Trị (Dashboard)</h2>
+<body class="theme-vulnerable">
+
+    <div class="top-bar">
+        <span id="modeLabelDashboard">VULNERABLE</span>
+        </div>
+
+    <div class="container" style="max-width: 900px;"> <h2>Khu Vực Báo Cáo dữ liệu</h2>
         
-        <div class="message success" id="welcomeMsg">
-            Đang tải dữ liệu...
+        <div class="message success" id="welcomeMsg" style="font-size: 20px;">
+            Đang tải...
         </div>
 
-        <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 5px; border: 1px dashed #ccc;">
-            <p style="color: #666; font-weight: bold; margin-bottom: 5px;">🔴 [DEMO LỖ HỔNG] Thông tin Phiên (Session ID) hiện tại:</p>
-            <code id="sessionDisplay" style="word-break: break-all; color: #d9534f; font-size: 13px;">...</code>
-            <p style="font-size: 12px; margin-top: 10px; color: #888;">
-                * Giảng viên lưu ý: Ở chế độ "vulnerable", Session ID này cố định hoặc dễ đoán. Kẻ tấn công có thể chép chuỗi này để chiếm quyền.
-            </p>
+        <div class="data-panel panel-vuln">
+            <h3>Thông tin Session ID </h3>
+            <code id="sessionDisplay">N/A</code>
         </div>
 
-        <button id="logoutBtn" style="background-color: #dc3545; margin-top: 25px;">Đăng xuất</button>
+        <div class="data-panel panel-vuln">
+            <h3>Cookie Ghi nhớ </h3>
+            <code id="rememberDisplay">N/A</code>
+        </div>
+
+        <div class="data-panel panel-secure">
+            <h3>JWT Access Token</h3>
+            <code id="jwtRawDisplay" style="color: #ea4335; word-break: break-all;">N/A</code>
+        </div>
+
+        <div class="data-panel panel-secure">
+            <h3>Giải mã JWT </h3>
+            <pre><code id="jwtDecodedDisplay" style="color: #49cc90; font-weight: bold;">N/A</code></pre>
+        </div>
+
+        <button id="testAdminBtn">Test gọi API Admin check quyền JWT)</button>
+        <div id="adminDataBox" class="data-panel hidden"></div>
+
+        <button id="logoutBtn" style="margin-top: 30px;">Đăng xuất</button>
     </div>
 
-    <script>
-        // KIỂM TRA ĐĂNG NHẬP
-        const sessionId = localStorage.getItem('auth_session_id');
-        const username = localStorage.getItem('auth_username');
-        const role = localStorage.getItem('auth_role');
-
-        if (!sessionId) {
-            // Nếu không có session, đá văng ra trang đăng nhập
-            alert("Bạn chưa đăng nhập hoặc phiên đã hết hạn!");
-            window.location.href = 'index.html';
-        } else {
-            // Hiển thị thông tin
-            document.getElementById('welcomeMsg').innerHTML = `Xin chào <b>${username}</b>! Quyền hạn: <b>${role.toUpperCase()}</b>`;
-            document.getElementById('sessionDisplay').textContent = sessionId;
-        }
-
-        // CHỨC NĂNG ĐĂNG XUẤT
-        document.getElementById('logoutBtn').addEventListener('click', function() {
-            localStorage.clear(); // Xóa sạch token trong bộ nhớ
-            window.location.href = 'index.html';
-        });
-    </script>
+    <script src="js/app.js"></script>
+    <script>document.addEventListener('DOMContentLoaded', loadDashboardData);</script>
 </body>
 </html>

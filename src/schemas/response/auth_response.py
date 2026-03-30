@@ -9,4 +9,7 @@ class AuthResponse(BaseModel):
     role: Optional[str] = None
     require_mfa: bool = False
     temp_token: Optional[str] = None
-    remember_cookie: Optional[str] = None 
+    remember_cookie: Optional[str] = None
+    #  JWT 
+    access_token: Optional[str] = None  
+    token_type: Optional[str] = None

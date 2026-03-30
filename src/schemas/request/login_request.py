@@ -17,3 +17,7 @@ class ForgotPasswordRequest(BaseModel):
 class ResetPasswordRequest(BaseModel):
     token: str
     new_password: str
+    
+class GoogleSSORequest(BaseModel):
+    email: str = Field(..., description="Email mà Client báo cáo lên")
+    google_id_token: str = Field(..., description="Mã Token do Google cấp")

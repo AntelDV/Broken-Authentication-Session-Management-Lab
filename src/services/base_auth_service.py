@@ -5,6 +5,8 @@ from sqlalchemy.orm import Session
 from src.schemas.request.login_request import LoginRequest, MFAVerifyRequest, ForgotPasswordRequest, ResetPasswordRequest
 from src.schemas.response.auth_response import AuthResponse
 
+from src.schemas.request.login_request import LoginRequest, MFAVerifyRequest, ForgotPasswordRequest, ResetPasswordRequest, GoogleSSORequest
+
 class BaseAuthService(ABC):
     @abstractmethod
     def login(self, db: Session, request: LoginRequest) -> AuthResponse:
@@ -24,4 +26,8 @@ class BaseAuthService(ABC):
 
     @abstractmethod
     def reset_password(self, db: Session, request: ResetPasswordRequest) -> dict:
+        pass
+    
+    @abstractmethod
+    def google_sso_login(self, db: Session, request: GoogleSSORequest) -> AuthResponse:
         pass
