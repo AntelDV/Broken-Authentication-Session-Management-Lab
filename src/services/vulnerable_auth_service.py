@@ -29,10 +29,23 @@ class VulnerableAuthService(BaseAuthService):
 
     def login(self, db: Session, request: LoginRequest) -> AuthResponse:
         user = self.user_repo.get_by_username(db, request.username)
+        
         if not user:
             raise HTTPException(status_code=404, detail="Tài khoản không tồn tại")
+            
+        if user.is_locked:
+            raise HTTPException(status_code=401, detail="Tài khoản đã bị khóa do nhập sai quá nhiều lần!")
+
         if not verify_md5(request.password, user.password_hash):
+            # Tăng biến đếm nhập sai
+            attempts = user.failed_login_attempts + 1
+            is_locked = attempts >= 5 # Sai 5 lần thì khóa
+            self.user_repo.update_failed_attempts(db, user, attempts, is_locked)
+            
             raise HTTPException(status_code=401, detail="Sai mật khẩu")
+
+        # Đăng nhập đúng -> Reset đếm sai về 0
+        self.user_repo.update_failed_attempts(db, user, 0, False)
 
         fake_vulnerable_session = f"session_of_{user.username}_static"
         return AuthResponse(message="Đăng nhập thành công (Vulnerable Mode)", session_id=fake_vulnerable_session, role=user.role.value)

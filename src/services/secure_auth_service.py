@@ -9,6 +9,7 @@ import secrets
 from datetime import datetime, timedelta
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
+from passlib.exc import UnknownHashError
 
 from src.services.base_auth_service import BaseAuthService
 from src.schemas.request.login_request import LoginRequest, MFAVerifyRequest, ForgotPasswordRequest, ResetPasswordRequest
@@ -27,7 +28,24 @@ class SecureAuthService(BaseAuthService):
         user = self.user_repo.get_by_username(db, request.username)
         generic_error = HTTPException(status_code=401, detail="Tài khoản hoặc mật khẩu không chính xác")
 
-        if not user or not verify_bcrypt(request.password, user.password_hash):
+        try:
+            if not user:
+                raise generic_error
+                
+            if user.is_locked:
+                raise generic_error
+
+            if not verify_bcrypt(request.password, user.password_hash):
+                # Tăng biến đếm nhập sai và khóa nếu quá 5 lần
+                attempts = user.failed_login_attempts + 1
+                is_locked = attempts >= 5
+                self.user_repo.update_failed_attempts(db, user, attempts, is_locked)
+                raise generic_error
+                
+            # Đăng nhập đúng -> Reset đếm sai về 0
+            self.user_repo.update_failed_attempts(db, user, 0, False)
+
+        except UnknownHashError:
             raise generic_error
 
         return AuthResponse(message="Đăng nhập thành công (Secure Mode)", session_id=str(uuid.uuid4()), role=user.role.value)
@@ -77,7 +95,7 @@ class SecureAuthService(BaseAuthService):
         if datetime.now() > token_record.expires_at:
             raise HTTPException(status_code=400, detail="Token đã hết hạn.")
             
-        user = self.user_repo.get_by_username(db, "admin") # Fix nhanh query
+        user = self.user_repo.get_by_username(db, "admin") 
         for u in db.query(user.__class__).all():
             if u.id == token_record.user_id: user = u
             
