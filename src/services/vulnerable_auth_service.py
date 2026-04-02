@@ -50,18 +50,15 @@ class VulnerableAuthService(BaseAuthService):
 
         self.user_repo.update_failed_attempts(db, user, 0, False)
         
-        fake_vulnerable_session = f"session_of_{user.username}_static"
-        
-        # Ghép Username và Hash MD5 nhét thẳng vào Cookie
         import base64
+        raw_session_id = f"session_{user.username}"
+        encoded_session_id = base64.b64encode(raw_session_id.encode()).decode('utf-8')
+        
         from src.utils.hash_util import hash_md5
-        remember_cookie = None
+        encoded_remember_token = None
         if request.remember_me:
-            # Hacker bắt được cục này sẽ giải mã Base64 và đem MD5 đi crack offline
-            raw_cookie = f"{user.username}:{hash_md5(request.password)}"
-            remember_cookie = base64.b64encode(raw_cookie.encode()).decode('utf-8')
-
-        fake_vulnerable_session = f"session_of_{user.username}_static"
+            raw_remember_data = f"{user.username}:{hash_md5(request.password)}"
+            encoded_remember_token = base64.b64encode(raw_remember_data.encode()).decode('utf-8')
         
         
         # Sinh JWT Token thực tế chứa thông tin User
@@ -71,9 +68,9 @@ class VulnerableAuthService(BaseAuthService):
 
         return AuthResponse(
             message="Đăng nhập thành công", 
-            session_id=fake_vulnerable_session,
+            session_id=encoded_session_id,
             role=user.role.value,
-            remember_cookie=remember_cookie,
+            remember_cookie=encoded_remember_token,
             access_token=access_token,   # <-- Cấp JWT
             token_type="bearer"          # <-- OAuth2
         )

@@ -19,21 +19,21 @@
       </div>
 
       <div class="data-panel panel-vuln">
-        <h3>Thông tin Session ID</h3>
+        <h3>🔴 1. Thông tin Session ID</h3>
         <code id="sessionDisplay">N/A</code>
       </div>
       <div class="data-panel panel-vuln">
-        <h3>Cookie Remember Me</h3>
+        <h3>🔴 2. Cookie Ghi nhớ (Remember Me)</h3>
         <code id="rememberDisplay">N/A</code>
       </div>
       <div class="data-panel panel-vuln">
-        <h3>Chuỗi JWT Access Token</h3>
+        <h3>🔵 3. Chuỗi JWT Access Token thô</h3>
         <code id="jwtRawDisplay" style="color: #ea4335; word-break: break-all"
           >N/A</code
         >
       </div>
       <div class="data-panel panel-vuln">
-        <h3>Giải mã JWT Decoded Payload</h3>
+        <h3>🔎 4. Giải mã JWT (Decoded Payload)</h3>
         <pre><code id="jwtDecodedDisplay" style="color: #49cc90;">N/A</code></pre>
       </div>
 
@@ -41,10 +41,13 @@
         class="data-panel panel-secure-only hidden"
         style="border-color: #49cc90; background: #e8f5e9"
       >
-        <h3>🛡️ An Toàn</h3>
+        <h3>🛡️ Hồ Sơ An Toàn</h3>
         <p style="margin: 10px 0">
           <strong>Định danh:</strong>
-          <span id="secUsername" style="color: #3b4151"></span>
+          <span
+            id="secUsername"
+            style="color: #3b4151; font-weight: bold"
+          ></span>
         </p>
         <p style="margin: 10px 0">
           <strong>Xác thực đa yếu tố (MFA):</strong>
@@ -53,7 +56,7 @@
         <p style="margin: 10px 0">
           <strong>Phiên kết nối:</strong>
           <span style="color: #2e7d32; font-weight: bold"
-            >Bảo vệ bởi HttpOnly Cookie & Anti-CSRF</span
+            >Bảo vệ bởi HttpOnly & SameSite Cookie</span
           >
         </p>
         <p style="margin: 10px 0">

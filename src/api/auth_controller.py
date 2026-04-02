@@ -56,12 +56,12 @@ def login(
             response.set_cookie(
                 key="auth_session_id", value=auth_result.session_id,
                 httponly=False, secure=False, samesite="lax", 
-                max_age=315360000    # Sống 10 năm 
+                max_age=34560000    
             )
         if auth_result.remember_cookie:
             response.set_cookie(
                 key="remember_me", value=auth_result.remember_cookie,
-                httponly=False, secure=False, samesite="lax", max_age=315360000
+                httponly=False, secure=False, samesite="lax", max_age=34560000
             )
 
     return auth_result
@@ -86,7 +86,7 @@ def verify_mfa(request: MFAVerifyRequest, response: Response, db: Session = Depe
     elif session_id:
         response.set_cookie(
             key="auth_session_id", value=session_id,
-            httponly=False, secure=False, samesite="lax", max_age=315360000
+            httponly=False, secure=False, samesite="lax", max_age=34560000
         )
         
     return result

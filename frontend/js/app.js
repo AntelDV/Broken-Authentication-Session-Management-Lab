@@ -159,6 +159,8 @@ function showMessage(msg, type) {
 // --- LOGIC TRANG DASHBOARD ---
 function loadDashboardData() {
   const username = localStorage.getItem("auth_username");
+  const role = localStorage.getItem("auth_role");
+
   if (!username) {
     window.location.href = "/";
     return;
@@ -167,8 +169,10 @@ function loadDashboardData() {
   syncTheme();
 
   document.getElementById("welcomeMsg").innerHTML =
-    `Xin chào <b>${username}</b>! Quyền: <b>[ ${localStorage.getItem("auth_role").toUpperCase()} ]</b>`;
-  document.getElementById("secUsername").textContent = username;
+    `Xin chào <b>${username}</b>! Quyền: <b>[ ${role.toUpperCase()} ]</b>`;
+
+  const secUserSpan = document.getElementById("secUsername");
+  if (secUserSpan) secUserSpan.textContent = username;
 
   document.getElementById("sessionDisplay").textContent =
     localStorage.getItem("auth_session") || "null";
