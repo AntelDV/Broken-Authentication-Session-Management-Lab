@@ -3,72 +3,131 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Dashboard - Security Lab</title>
+    <title>Không Gian Quản Trị</title>
+    <link rel="stylesheet" href="vendor/fontawesome/css/all.min.css" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="css/style.css" />
   </head>
-  <body class="theme-vulnerable">
+  <body class="theme-vulnerable dashboard-layout">
     <div class="top-bar">
-      <span id="modeLabelDashboard">☠️ VULNERABLE MODE</span>
+      <div class="brand">
+        <i class="fas fa-shield-alt"></i> Quản Trị Trung Tâm
+      </div>
+      <div class="user-menu">
+        <span style="font-size: 18px; margin-right: 20px; font-weight: 600"
+          ><i class="fas fa-user-circle"></i> Xin chào,
+          <b id="welcomeName">User</b></span
+        >
+        <button id="logoutBtn" class="btn-danger-small">
+          <i class="fas fa-sign-out-alt"></i> Đăng xuất
+        </button>
+      </div>
     </div>
 
-    <div class="container" style="max-width: 900px">
-      <h2>Khu Vực Quản Trị</h2>
+    <div class="dashboard-container fade-in">
+      <div class="main-content">
+        <div class="info-card">
+          <h3><i class="fas fa-id-badge"></i> Hồ Sơ Tài Khoản</h3>
+          <p style="font-size: 18px; margin-bottom: 15px">
+            Vai trò hệ thống: <strong id="userRole" class="badge">N/A</strong>
+          </p>
+          <p style="font-size: 18px">
+            Bảo mật đa yếu tố (MFA):
+            <strong id="mfaStatus" class="badge">N/A</strong>
+          </p>
+        </div>
 
-      <div class="message success" id="welcomeMsg" style="font-size: 20px">
-        Đang tải...
-      </div>
-
-      <div class="data-panel panel-vuln">
-        <h3>🔴 1. Thông tin Session ID</h3>
-        <code id="sessionDisplay">N/A</code>
-      </div>
-      <div class="data-panel panel-vuln">
-        <h3>🔴 2. Cookie Ghi nhớ (Remember Me)</h3>
-        <code id="rememberDisplay">N/A</code>
-      </div>
-      <div class="data-panel panel-vuln">
-        <h3>🔵 3. Chuỗi JWT Access Token thô</h3>
-        <code id="jwtRawDisplay" style="color: #ea4335; word-break: break-all"
-          >N/A</code
-        >
-      </div>
-      <div class="data-panel panel-vuln">
-        <h3>🔎 4. Giải mã JWT (Decoded Payload)</h3>
-        <pre><code id="jwtDecodedDisplay" style="color: #49cc90;">N/A</code></pre>
-      </div>
-
-      <div
-        class="data-panel panel-secure-only hidden"
-        style="border-color: #49cc90; background: #e8f5e9"
-      >
-        <h3>🛡️ Hồ Sơ An Toàn</h3>
-        <p style="margin: 10px 0">
-          <strong>Định danh:</strong>
-          <span
-            id="secUsername"
-            style="color: #3b4151; font-weight: bold"
-          ></span>
-        </p>
-        <p style="margin: 10px 0">
-          <strong>Xác thực đa yếu tố (MFA):</strong>
-          <span style="color: #2e7d32; font-weight: bold">Hoạt động</span>
-        </p>
-        <p style="margin: 10px 0">
-          <strong>Phiên kết nối:</strong>
-          <span style="color: #2e7d32; font-weight: bold"
-            >Bảo vệ bởi HttpOnly & SameSite Cookie</span
+        <div class="action-card">
+          <h3><i class="fas fa-users-cog"></i> Quản Trị Người Dùng</h3>
+          <p
+            style="
+              font-size: 17px;
+              color: #718096;
+              margin-bottom: 20px;
+              line-height: 1.5;
+            "
           >
-        </p>
-        <p style="margin: 10px 0">
-          <strong>Quản lý Token:</strong> Ẩn toàn bộ chi tiết mã hóa đối với
-          Client.
-        </p>
+            Khu vực tác vụ nhạy cảm, yêu cầu đặc quyền Quản trị viên (Admin).
+            Người dùng thông thường sẽ bị từ chối truy cập.
+          </p>
+          <button id="testAdminBtn" class="btn-outline">
+            <i class="fas fa-database"></i> Truy xuất danh sách toàn bộ tài
+            khoản
+          </button>
+          <div id="adminDataBox" class="data-box hidden mt-20"></div>
+        </div>
       </div>
 
-      <button id="testAdminBtn">Test gọi API Admin (Check quyền JWT)</button>
-      <div id="adminDataBox" class="data-panel hidden"></div>
+      <div class="inspector-panel slide-in-right">
+        <div class="inspector-header">
+          <h3><i class="fas fa-search"></i> Bảng Giám Sát Kỹ Thuật</h3>
+        </div>
+        <div class="inspector-body">
+          <div class="data-group panel-vuln">
+            <h4><i class="fas fa-cookie"></i> Mã Phiên Cổ Điển (Session)</h4>
+            <code id="sessionDisplay">N/A</code>
+          </div>
 
-      <button id="logoutBtn" style="margin-top: 30px">Đăng xuất</button>
+          <div class="data-group panel-vuln">
+            <h4><i class="fas fa-save"></i> Mã Ghi Nhớ Trạng Thái</h4>
+            <code id="rememberDisplay">N/A</code>
+          </div>
+
+          <div
+            class="data-group panel-secure-only hidden"
+            style="
+              background: #f0fdf4;
+              padding: 20px;
+              border-radius: 8px;
+              border: 2px solid #34d399;
+            "
+          >
+            <h4 style="color: #047857; margin-bottom: 15px">
+              <i class="fas fa-shield-check"></i> Hồ Sơ Cấu Hình An Toàn
+            </h4>
+            <p
+              style="
+                font-size: 16px;
+                margin: 12px 0;
+                color: #064e3b;
+                font-weight: 500;
+              "
+            >
+              <i class="fas fa-lock"></i> Cookie định tuyến: HttpOnly, SameSite
+            </p>
+            <p
+              style="
+                font-size: 16px;
+                margin: 12px 0;
+                color: #064e3b;
+                font-weight: 500;
+              "
+            >
+              <i class="fas fa-clock"></i> Tự động hủy phiên sau:
+              <strong
+                id="countdownTimer"
+                style="color: #dc2626; font-size: 22px; font-weight: 800"
+                >15:00</strong
+              >
+            </p>
+          </div>
+
+          <div class="data-group">
+            <h4>
+              <i class="fas fa-ticket-alt"></i> Khối Dữ Liệu Ủy Quyền (JWT)
+            </h4>
+            <code id="jwtRawDisplay" class="break-text">N/A</code>
+          </div>
+
+          <div class="data-group">
+            <h4><i class="fas fa-code"></i> Phân Tích Cấu Trúc (Payload)</h4>
+            <pre><code id="jwtDecodedDisplay">N/A</code></pre>
+          </div>
+        </div>
+      </div>
     </div>
 
     <script src="js/app.js"></script>
