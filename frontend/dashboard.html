@@ -1,50 +1,76 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="vi">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Dashboard - Security Lab</title>
-    <link rel="stylesheet" href="css/style.css">
-</head>
-<body class="theme-vulnerable">
-
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body class="theme-vulnerable">
     <div class="top-bar">
-        <span id="modeLabelDashboard">VULNERABLE</span>
-        </div>
+      <span id="modeLabelDashboard">☠️ VULNERABLE MODE</span>
+    </div>
 
-    <div class="container" style="max-width: 900px;"> <h2>Khu Vực Báo Cáo dữ liệu</h2>
-        
-        <div class="message success" id="welcomeMsg" style="font-size: 20px;">
-            Đang tải...
-        </div>
+    <div class="container" style="max-width: 900px">
+      <h2>Khu Vực Quản Trị</h2>
 
-        <div class="data-panel panel-vuln">
-            <h3>Thông tin Session ID </h3>
-            <code id="sessionDisplay">N/A</code>
-        </div>
+      <div class="message success" id="welcomeMsg" style="font-size: 20px">
+        Đang tải...
+      </div>
 
-        <div class="data-panel panel-vuln">
-            <h3>Cookie Ghi nhớ </h3>
-            <code id="rememberDisplay">N/A</code>
-        </div>
+      <div class="data-panel panel-vuln">
+        <h3>Thông tin Session ID</h3>
+        <code id="sessionDisplay">N/A</code>
+      </div>
+      <div class="data-panel panel-vuln">
+        <h3>Cookie Remember Me</h3>
+        <code id="rememberDisplay">N/A</code>
+      </div>
+      <div class="data-panel panel-vuln">
+        <h3>Chuỗi JWT Access Token</h3>
+        <code id="jwtRawDisplay" style="color: #ea4335; word-break: break-all"
+          >N/A</code
+        >
+      </div>
+      <div class="data-panel panel-vuln">
+        <h3>Giải mã JWT Decoded Payload</h3>
+        <pre><code id="jwtDecodedDisplay" style="color: #49cc90;">N/A</code></pre>
+      </div>
 
-        <div class="data-panel panel-secure">
-            <h3>JWT Access Token</h3>
-            <code id="jwtRawDisplay" style="color: #ea4335; word-break: break-all;">N/A</code>
-        </div>
+      <div
+        class="data-panel panel-secure-only hidden"
+        style="border-color: #49cc90; background: #e8f5e9"
+      >
+        <h3>🛡️ An Toàn</h3>
+        <p style="margin: 10px 0">
+          <strong>Định danh:</strong>
+          <span id="secUsername" style="color: #3b4151"></span>
+        </p>
+        <p style="margin: 10px 0">
+          <strong>Xác thực đa yếu tố (MFA):</strong>
+          <span style="color: #2e7d32; font-weight: bold">Hoạt động</span>
+        </p>
+        <p style="margin: 10px 0">
+          <strong>Phiên kết nối:</strong>
+          <span style="color: #2e7d32; font-weight: bold"
+            >Bảo vệ bởi HttpOnly Cookie & Anti-CSRF</span
+          >
+        </p>
+        <p style="margin: 10px 0">
+          <strong>Quản lý Token:</strong> Ẩn toàn bộ chi tiết mã hóa đối với
+          Client.
+        </p>
+      </div>
 
-        <div class="data-panel panel-secure">
-            <h3>Giải mã JWT </h3>
-            <pre><code id="jwtDecodedDisplay" style="color: #49cc90; font-weight: bold;">N/A</code></pre>
-        </div>
+      <button id="testAdminBtn">Test gọi API Admin (Check quyền JWT)</button>
+      <div id="adminDataBox" class="data-panel hidden"></div>
 
-        <button id="testAdminBtn">Test gọi API Admin check quyền JWT)</button>
-        <div id="adminDataBox" class="data-panel hidden"></div>
-
-        <button id="logoutBtn" style="margin-top: 30px;">Đăng xuất</button>
+      <button id="logoutBtn" style="margin-top: 30px">Đăng xuất</button>
     </div>
 
     <script src="js/app.js"></script>
-    <script>document.addEventListener('DOMContentLoaded', loadDashboardData);</script>
-</body>
+    <script>
+      document.addEventListener("DOMContentLoaded", loadDashboardData);
+    </script>
+  </body>
 </html>

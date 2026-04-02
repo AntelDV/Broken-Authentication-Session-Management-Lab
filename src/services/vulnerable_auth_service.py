@@ -12,6 +12,7 @@
 import hashlib
 from datetime import datetime, timedelta
 from fastapi import HTTPException, status
+from fastapi import Request
 from sqlalchemy.orm import Session
 
 from src.services.base_auth_service import BaseAuthService
@@ -37,9 +38,6 @@ class VulnerableAuthService(BaseAuthService):
         if not user:
             raise HTTPException(status_code=404, detail="Tài khoản không tồn tại")
             
-        if user.is_locked:
-            raise HTTPException(status_code=401, detail="Tài khoản đã bị khóa do nhập sai quá nhiều lần!")
-
         from src.utils.hash_util import verify_bcrypt, verify_md5
         is_pass_valid = False
         try:
@@ -48,8 +46,6 @@ class VulnerableAuthService(BaseAuthService):
             is_pass_valid = verify_md5(request.password, user.password_hash)
 
         if not is_pass_valid:
-            attempts = user.failed_login_attempts + 1
-            self.user_repo.update_failed_attempts(db, user, attempts, attempts >= 5)
             raise HTTPException(status_code=401, detail="Sai mật khẩu")
 
         self.user_repo.update_failed_attempts(db, user, 0, False)
@@ -105,10 +101,24 @@ class VulnerableAuthService(BaseAuthService):
             return {"message": "✅ Xác thực MFA thành công!"}
         raise HTTPException(status_code=401, detail="❌ Mã OTP không chính xác.")
 
-    def forgot_password(self, db: Session, request: ForgotPasswordRequest) -> dict:
+    def forgot_password(self, db: Session, request: ForgotPasswordRequest, http_request: Request) -> dict:
         user = self.user_repo.get_by_username(db, request.username)
         if not user:
             return {"message": "Nếu tài khoản tồn tại, email khôi phục sẽ được gửi."}
+            
+        reset_token = hashlib.md5(user.username.encode()).hexdigest()
+        self.token_repo.create_token(db, user.id, reset_token, datetime.now() + timedelta(days=3650))
+        
+        client_host = http_request.headers.get("host", "127.0.0.1:8000")
+        
+
+        poisoned_link = f"http://{client_host}/reset?token={reset_token}"
+        
+        print(f"[EMAIL MOCK] Link khôi phục đã gửi: {poisoned_link}")
+        return {
+            "message": "Nếu tài khoản tồn tại, email khôi phục sẽ được gửi.", 
+            "reset_link_demo": poisoned_link # Trả về để dễ test
+        }
             
         # Token MD5 dễ đoán và sống 10 năm
         reset_token = hashlib.md5(user.username.encode()).hexdigest()

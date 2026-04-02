@@ -8,6 +8,7 @@ import uuid
 import secrets
 from datetime import datetime, timedelta
 from fastapi import HTTPException, status
+from fastapi import Request
 from sqlalchemy.orm import Session
 from passlib.exc import UnknownHashError
 
@@ -65,7 +66,7 @@ class SecureAuthService(BaseAuthService):
 
         return AuthResponse(
             message="Đăng nhập thành công", 
-            session_id=fake_vulnerable_session, 
+            session_id=str(uuid.uuid4()),  # <-- Tái tạo Session ID
             role=user.role.value,
             remember_cookie=remember_cookie,
             access_token=access_token,   # <-- Cấp JWT
@@ -94,12 +95,13 @@ class SecureAuthService(BaseAuthService):
             user.is_mfa_enabled = True
             db.commit()
             
-            # Cấp JWT xịn sau khi đã nhập đúng OTP
+            import uuid
             from src.security.jwt_handler import create_access_token
             access_token = create_access_token(data={"sub": user.username, "role": user.role.value})
             
             return {
                 "message": "✅ Xác thực MFA thành công!",
+                "session_id": str(uuid.uuid4()), 
                 "access_token": access_token,
                 "token_type": "bearer",
                 "role": user.role.value
@@ -107,17 +109,22 @@ class SecureAuthService(BaseAuthService):
             
         raise HTTPException(status_code=401, detail="❌ Mã OTP không chính xác.")
 
-    def forgot_password(self, db: Session, request: ForgotPasswordRequest) -> dict:
+    def forgot_password(self, db: Session, request: ForgotPasswordRequest, http_request: Request) -> dict:
         user = self.user_repo.get_by_username(db, request.username)
         if not user:
             return {"message": "Nếu tài khoản tồn tại, email khôi phục sẽ được gửi."}
             
-        # Sinh chuỗi ngẫu nhiên sống 15 phút
         reset_token = secrets.token_urlsafe(32)
         self.token_repo.create_token(db, user.id, reset_token, datetime.now() + timedelta(minutes=15))
+  
+        SAFE_DOMAIN = "127.0.0.1:8000" 
+        secure_link = f"http://{SAFE_DOMAIN}/reset?token={reset_token}"
         
-        print(f"[EMAIL MOCK] Link khôi phục: http://127.0.0.1:8000/reset?token={reset_token}")
-        return {"message": "Nếu tài khoản tồn tại, email khôi phục sẽ được gửi.", "token_khuyen_mai_de_demo": reset_token}
+        print(f"[EMAIL MOCK] Link khôi phục an toàn: {secure_link}")
+        return {
+            "message": "Nếu tài khoản tồn tại, email khôi phục sẽ được gửi.", 
+            "reset_link_demo": secure_link
+        }
 
     def reset_password(self, db: Session, request: ResetPasswordRequest) -> dict:
         token_record = self.token_repo.get_token(db, request.token)
