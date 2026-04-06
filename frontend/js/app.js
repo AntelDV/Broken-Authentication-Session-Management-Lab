@@ -37,9 +37,20 @@ function syncTheme() {
 }
 
 if (modeToggle) {
-  modeToggle.addEventListener("change", function () {
-    localStorage.setItem("ui_mode", this.checked ? "secure" : "vulnerable");
+  modeToggle.addEventListener("change", async function () {
+    const newMode = this.checked ? "secure" : "vulnerable";
+    localStorage.setItem("ui_mode", newMode);
     syncTheme();
+
+    try {
+      await fetch("http://127.0.0.1:8000/api/system/switch-mode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: newMode }),
+      });
+    } catch (e) {
+      console.error("Lỗi đồng bộ với Server!");
+    }
   });
 }
 syncTheme();

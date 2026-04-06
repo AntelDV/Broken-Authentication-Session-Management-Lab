@@ -148,7 +148,7 @@ class VulnerableAuthService(BaseAuthService):
         access_token = create_access_token(data={"sub": user.username, "role": user.role.value})
         
         return AuthResponse(
-            message="Đăng nhập SSO thành công", 
+            message="Đăng nhập SSO thành công (Hệ thống bị lừa!)", 
             role=user.role.value,
             access_token=access_token,
             token_type="bearer"

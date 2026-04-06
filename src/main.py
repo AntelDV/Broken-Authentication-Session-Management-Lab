@@ -10,6 +10,8 @@ from src.api.admin_controller import router as admin_router
 from src.middlewares.timing_middleware import TimingMiddleware
 from src.middlewares.rate_limit_middleware import RateLimitMiddleware
 
+from pydantic import BaseModel
+
 app = FastAPI(title=settings.APP_NAME)
 
 # Cấu hình CORS
@@ -44,3 +46,14 @@ async def read_index():
 async def read_dashboard():
     from fastapi.responses import FileResponse
     return FileResponse(os.path.join(frontend_path, "dashboard.html"))
+
+class ModeSwitchRequest(BaseModel):
+    mode: str
+
+@app.post("/api/system/switch-mode", tags=["System"])
+def switch_mode(request: ModeSwitchRequest):
+    if request.mode not in ["vulnerable", "secure"]:
+        return {"detail": "Chế độ không hợp lệ!"}
+    
+    settings.AUTH_MODE = request.mode
+    return {"message": f"Đã chuyển Server sang chế độ {request.mode.upper()}", "current_mode": settings.AUTH_MODE}

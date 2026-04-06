@@ -147,16 +147,24 @@ class SecureAuthService(BaseAuthService):
 
     def google_sso_login(self, db: Session, request: GoogleSSORequest) -> AuthResponse:
         try:
-            # mô phỏng bằng hàm verify JWT 
             from src.security.jwt_handler import verify_jwt_token
             payload = verify_jwt_token(request.google_id_token)
-            verified_email = payload.get("email") # Lấy email được phong ấn trong token
+            verified_email = payload.get("email") 
         except Exception:
-            raise HTTPException(status_code=401, detail="Google Token không hợp lệ hoặc giả mạo!")
+            raise HTTPException(status_code=401, detail="Google Token không hợp lệ hoặc bị giả mạo!")
 
         user = db.query(User).filter(User.email == verified_email).first()
         if not user:
             raise HTTPException(status_code=404, detail="Email không tồn tại trong hệ thống")
+
+        if user.is_mfa_enabled:
+            import secrets
+            return AuthResponse(
+                message="Xác thực SSO thành công. Vui lòng nhập mã OTP để hoàn tất.",
+                require_mfa=True,
+                temp_token=user.username,
+                remember_cookie=secrets.token_urlsafe(64)
+            )
 
         from src.security.jwt_handler import create_access_token
         access_token = create_access_token(data={"sub": user.username, "role": user.role.value})
