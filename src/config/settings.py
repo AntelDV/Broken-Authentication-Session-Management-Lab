@@ -1,6 +1,3 @@
-# WORKFLOW: Quản lý toàn bộ cấu hình hệ thống một cách tập trung.
-# CONCEPT: Dùng pydantic_settings để tự động map các biến từ file .env vào class Settings.
-# ĐIỂM NEO: Biến AUTH_MODE là "công tắc" thần thánh để chúng ta chuyển đổi kịch bản demo.
 import os
 from pydantic_settings import BaseSettings
 

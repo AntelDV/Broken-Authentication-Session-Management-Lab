@@ -1,5 +1,4 @@
-# WORKFLOW: Chứa các lệnh truy vấn DB thực tế (ví dụ: get_user_by_username).
-# CONCEPT: Tách biệt query DB ra khỏi tầng Service để dễ thay đổi Database sau này.
+
 from sqlalchemy.orm import Session
 from src.models.user import User
 

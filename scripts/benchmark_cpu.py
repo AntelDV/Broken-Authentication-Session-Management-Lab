@@ -4,7 +4,7 @@ import psutil
 import requests
 
 URL = "http://127.0.0.1:8000/api/auth/login"
-NUM_REQUESTS = 300 # Số lượng request ném vào Server
+NUM_REQUESTS = 300 
 cpu_logs = []
 is_running = True
 

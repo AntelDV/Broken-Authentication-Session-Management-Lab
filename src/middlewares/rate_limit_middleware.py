@@ -1,4 +1,3 @@
-# WORKFLOW: MIDDLEWARE CHẶN BRUTE-FORCE.
 # HOẠT ĐỘNG:
 # 1. Chặn ngay Request trước khi nó kịp chạm tới Controller.
 # 2. Trích xuất IP của Client.

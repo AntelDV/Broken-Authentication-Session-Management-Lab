@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Không Gian Quản Trị</title>
+    <title>Trang chủ hệ thống</title>
     <link rel="stylesheet" href="vendor/fontawesome/css/all.min.css" />
     <link
       href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap"
@@ -13,13 +13,22 @@
   </head>
   <body class="theme-vulnerable dashboard-layout">
     <div class="top-bar">
-      <div class="brand">
-        <i class="fas fa-shield-alt"></i> Quản Trị Trung Tâm
+      <div class="brand"><i class="fas fa-university"></i> Cổng quản trị</div>
+
+      <div class="switch-container">
+        <span id="modeLabel"
+          ><i class="fas fa-exclamation-triangle"></i> Cảnh báo</span
+        >
+        <label class="switch">
+          <input type="checkbox" id="modeToggle" />
+          <span class="slider round"></span>
+        </label>
       </div>
-      <div class="user-menu">
+
+      <div class="user-menu" style="display: flex; align-items: center">
         <span style="font-size: 18px; margin-right: 20px; font-weight: 600"
           ><i class="fas fa-user-circle"></i> Xin chào,
-          <b id="welcomeName">User</b></span
+          <b id="welcomeName">Người dùng</b></span
         >
         <button id="logoutBtn" class="btn-danger-small">
           <i class="fas fa-sign-out-alt"></i> Đăng xuất
@@ -28,103 +37,106 @@
     </div>
 
     <div class="dashboard-container fade-in">
-      <div class="main-content">
+      <div
+        id="userView"
+        class="hidden"
+        style="max-width: 800px; margin: 0 auto"
+      >
         <div class="info-card">
-          <h3><i class="fas fa-id-badge"></i> Hồ Sơ Tài Khoản</h3>
+          <h3><i class="fas fa-id-card"></i> Hồ sơ cá nhân</h3>
           <p style="font-size: 18px; margin-bottom: 15px">
-            Vai trò hệ thống: <strong id="userRole" class="badge">N/A</strong>
+            Vai trò hệ thống: <strong class="badge">NGƯỜI DÙNG</strong>
           </p>
           <p style="font-size: 18px">
-            Bảo mật đa yếu tố (MFA):
-            <strong id="mfaStatus" class="badge">N/A</strong>
+            Xác minh hai bước:
+            <strong id="userMfaStatus" class="badge">Đang tải</strong>
           </p>
         </div>
 
-        <div class="action-card">
-          <h3><i class="fas fa-users-cog"></i> Quản Trị Người Dùng</h3>
-          <p
+        <div class="action-card mt-20" style="border-left: 5px solid #e53e3e">
+          <h3 style="color: #c53030; border-bottom: none">
+            <i class="fas fa-lock"></i> Khu vực giới hạn
+          </h3>
+          <p style="font-size: 17px; color: #718096; margin-bottom: 20px">
+            Chức năng này chỉ dành cho Ban quản trị. Bạn không có quyền truy cập
+            vào đây.
+          </p>
+          <button
+            id="btnUserAccessAdmin"
+            class="btn-outline"
+            style="border-color: #e2e8f0"
+          >
+            <i class="fas fa-database"></i> Truy cập dữ liệu nhân sự
+          </button>
+          <div
+            id="userErrorBox"
+            class="hidden mt-20"
             style="
-              font-size: 17px;
-              color: #718096;
-              margin-bottom: 20px;
-              line-height: 1.5;
+              padding: 15px;
+              background: #fff5f5;
+              color: #c53030;
+              font-weight: bold;
+              border-radius: 8px;
+              border: 1px solid #feb2b2;
             "
           >
-            Khu vực tác vụ nhạy cảm, yêu cầu đặc quyền Quản trị viên (Admin).
-            Người dùng thông thường sẽ bị từ chối truy cập.
-          </p>
-          <button id="testAdminBtn" class="btn-outline">
-            <i class="fas fa-database"></i> Truy xuất danh sách toàn bộ tài
-            khoản
-          </button>
-          <div id="adminDataBox" class="data-box hidden mt-20"></div>
+            <i class="fas fa-ban"></i> Lỗi truy cập: Hệ thống từ chối yêu cầu.
+            Lịch sử vi phạm đã được ghi nhận.
+          </div>
         </div>
       </div>
 
-      <div class="inspector-panel slide-in-right">
-        <div class="inspector-header">
-          <h3><i class="fas fa-search"></i> Bảng Giám Sát Kỹ Thuật</h3>
+      <div id="adminView" class="hidden">
+        <div class="admin-grid">
+          <div class="stat-card">
+            <div class="stat-icon"><i class="fas fa-users"></i></div>
+            <div class="stat-data">
+              <h4>Tổng tài khoản</h4>
+              <p>10,000</p>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon"><i class="fas fa-user-shield"></i></div>
+            <div class="stat-data">
+              <h4>Ban quản trị</h4>
+              <p>5</p>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="color: var(--accent-color)">
+              <i class="fas fa-server"></i>
+            </div>
+            <div class="stat-data">
+              <h4>Trạng thái máy chủ</h4>
+              <p id="serverStatusText" style="color: var(--accent-color)">
+                Cảnh báo
+              </p>
+            </div>
+          </div>
         </div>
-        <div class="inspector-body">
-          <div class="data-group panel-vuln">
-            <h4><i class="fas fa-cookie"></i> Mã Phiên Cổ Điển (Session)</h4>
-            <code id="sessionDisplay">N/A</code>
-          </div>
 
-          <div class="data-group panel-vuln">
-            <h4><i class="fas fa-save"></i> Mã Ghi Nhớ Trạng Thái</h4>
-            <code id="rememberDisplay">N/A</code>
-          </div>
-
-          <div
-            class="data-group panel-secure-only hidden"
-            style="
-              background: #f0fdf4;
-              padding: 20px;
-              border-radius: 8px;
-              border: 2px solid #34d399;
-            "
-          >
-            <h4 style="color: #047857; margin-bottom: 15px">
-              <i class="fas fa-shield-check"></i> Hồ Sơ Cấu Hình An Toàn
-            </h4>
-            <p
-              style="
-                font-size: 16px;
-                margin: 12px 0;
-                color: #064e3b;
-                font-weight: 500;
-              "
-            >
-              <i class="fas fa-lock"></i> Cookie định tuyến: HttpOnly, SameSite
-            </p>
-            <p
-              style="
-                font-size: 16px;
-                margin: 12px 0;
-                color: #064e3b;
-                font-weight: 500;
-              "
-            >
-              <i class="fas fa-clock"></i> Tự động hủy phiên sau:
-              <strong
-                id="countdownTimer"
-                style="color: #dc2626; font-size: 22px; font-weight: 800"
-                >15:00</strong
-              >
-            </p>
-          </div>
-
-          <div class="data-group">
-            <h4>
-              <i class="fas fa-ticket-alt"></i> Khối Dữ Liệu Ủy Quyền (JWT)
-            </h4>
-            <code id="jwtRawDisplay" class="break-text">N/A</code>
-          </div>
-
-          <div class="data-group">
-            <h4><i class="fas fa-code"></i> Phân Tích Cấu Trúc (Payload)</h4>
-            <pre><code id="jwtDecodedDisplay">N/A</code></pre>
+        <div class="action-card">
+          <h3><i class="fas fa-database"></i> Danh sách người dùng hệ thống</h3>
+          <div class="table-responsive mt-15">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>Tên tài khoản</th>
+                  <th>Email</th>
+                  <th>Vai trò</th>
+                  <th>Xác minh hai bước</th>
+                  <th>Hành động</th>
+                </tr>
+              </thead>
+              <tbody id="adminTableBody">
+                <tr>
+                  <td colspan="5" style="text-align: center">
+                    <i class="fas fa-spinner fa-spin"></i> Đang tải dữ liệu từ
+                    máy chủ...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </div>

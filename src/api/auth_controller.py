@@ -1,9 +1,9 @@
-# WORKFLOW: Xử lý Request HTTP đầu vào cho Đăng nhập/Đăng ký.
-# DATA FLOW: Client -> Controller (nhận LoginRequest) -> Chuyển vào Service tương ứng -> Nhận AuthResponse -> Client.
-# CONCEPT: Controller làm nhiệm vụ "điều phối" (Routing).
-# WORKFLOW: Xử lý Request HTTP đầu vào cho Đăng nhập/Đăng ký.
+# Xử lý Request HTTP đầu vào cho Đăng nhập/Đăng ký.
+# Client -> Controller (nhận LoginRequest) -> Chuyển vào Service tương ứng -> Nhận AuthResponse -> Client.
+# Controller làm nhiệm vụ "điều phối" (Routing).
+# Xử lý Request HTTP đầu vào cho Đăng nhập/Đăng ký.
 
-from fastapi import APIRouter, Depends, Response, Request
+from fastapi import APIRouter, Depends, HTTPException, Response, Request
 from sqlalchemy.orm import Session
 from src.schemas.request.login_request import LoginRequest, MFAVerifyRequest, ForgotPasswordRequest, ResetPasswordRequest
 from src.schemas.response.auth_response import AuthResponse
@@ -47,7 +47,7 @@ def login(
         if auth_result.remember_cookie:
             response.set_cookie(
                 key="remember_me", value=auth_result.remember_cookie,
-                httponly=True, secure=is_prod, samesite="strict", max_age=7*24*3600 # Sống 7 ngày
+                httponly=True, secure=is_prod, samesite="strict", max_age=7*24*3600 
             )
             auth_result.remember_cookie = "[Bảo mật: Chuỗi ngẫu nhiên an toàn]"
     else:
@@ -124,3 +124,10 @@ def get_mock_google_token(email: str):
     # Nhét email vào Payload và ký
     token = create_access_token(data={"email": email, "iss": "accounts.google.com"})
     return {"google_id_token": token}
+
+
+@router.post("/logout")
+def logout(response: Response):
+    response.delete_cookie(key="auth_session_id", path="/")
+    response.delete_cookie(key="remember_me", path="/")
+    return {"message": "Đã đăng xuất an toàn khỏi hệ thống"}

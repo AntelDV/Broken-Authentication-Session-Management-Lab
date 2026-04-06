@@ -12,4 +12,4 @@ class UserProfileResponse(BaseModel):
     is_locked: bool
     
     class Config:
-        from_attributes = True # Giúp Pydantic tự động đọc dữ liệu từ object SQLAlchemy
+        from_attributes = True 

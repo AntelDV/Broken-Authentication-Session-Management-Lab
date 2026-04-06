@@ -56,4 +56,4 @@ def switch_mode(request: ModeSwitchRequest):
         return {"detail": "Chế độ không hợp lệ!"}
     
     settings.AUTH_MODE = request.mode
-    return {"message": f"Đã chuyển Server sang chế độ {request.mode.upper()}", "current_mode": settings.AUTH_MODE}
+    return {"message": f"Server đã chuyển sang {request.mode.upper()}", "current_mode": settings.AUTH_MODE}

@@ -1,6 +1,3 @@
-#!/bin/bash
-# HƯỚNG DẪN TẤN CÔNG BRUTE-FORCE BẰNG HYDRA (Hỗ trợ JSON API)
-
 echo "Bắt đầu tấn công Hydra vào API Đăng nhập..."
 
 # Tạo một file từ điển mật khẩu nhỏ để test

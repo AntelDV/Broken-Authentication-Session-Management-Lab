@@ -1,13 +1,12 @@
-# HƯỚNG DẪN CREDENTIAL STUFFING BẰNG AIOHTTP[cite: 58, 59]:
-# Workflow: Đọc list 10k tài khoản -> asyncio.gather() để bắn 100 request/giây vào endpoint /login.
-# Mục đích: Đánh sập Server hoặc thu hoạch các account dùng chung mật khẩu.
+# Đọc list 10k tài khoản -> asyncio.gather() để bắn 100 request/giây vào endpoint /login.
+# Đánh sập Server hoặc thu hoạch các account dùng chung mật khẩu.
 
 import asyncio
 import aiohttp
 import time
 
 URL = "http://127.0.0.1:8000/api/auth/login"
-TOTAL_REQUESTS = 1000  # Số lượng request muốn bắn
+TOTAL_REQUESTS = 1000  
 
 async def fetch(session, username, password, fake_ip):
     payload = {"username": username, "password": password}
@@ -25,8 +24,8 @@ async def main():
     # bắn 100 request đồng thời
     async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(limit=1000)) as session:
         for i in range(TOTAL_REQUESTS):
-            # Truyền thêm fake_ip (mỗi request 1 IP khác nhau: 10.0.0.1, 10.0.0.2...)
-            tasks.append(fetch(session, f"hacker_{i}", f"pass_{i}", f"10.0.0.{i}"))
+            # Truyền thêm fake_ip 
+            tasks.append(fetch(session, f"hacker_{i}", f"pass_{i}", f"192.168.122.{i}"))
             
         start_time = time.time()
         results = await asyncio.gather(*tasks)
@@ -41,9 +40,9 @@ async def main():
     print("\n📊 THỐNG KÊ MÃ PHẢN HỒI HTTP:")
     for status, count in status_counts.items():
         if status == 429:
-            print(f"  ❌ Lỗi {status} (Bị chặn bởi Rate Limit): {count} requests")
+            print(f" Lỗi {status} Bị chặn bởi Rate Limit: {count} requests")
         elif status == 404 or status == 401:
-            print(f"  ✅ Code {status} (Server đã xử lý xong): {count} requests")
+            print(f"CODE {status} Server đã xử lý xong: {count} requests")
         else:
             print(f"  - Code {status}: {count} requests")
 

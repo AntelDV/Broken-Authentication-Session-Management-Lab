@@ -1,7 +1,7 @@
 # ==========================================
-# 🚨 VULNERABLE LOGIC (CỐ TÌNH SAI) 🚨
+#  VULNERABLE LOGIC 
 # ==========================================
-# LỖI SẼ ĐƯỢC CODE Ở ĐÂY:
+
 # 1. Băm mật khẩu: Gọi hàm md5() từ src/utils/hash_util.py. Không dùng Salt.
 # 2. SQL Injection: (Tùy chọn) Có thể code truy vấn DB bằng chuỗi thô (raw string) thay vì ORM.
 # 3. User Enumeration: Nếu không thấy username trong DB -> throw exception "Tài khoản không tồn tại".
@@ -9,16 +9,18 @@
 # 4. Session Fixation: Khi login thành công, không tạo session_id mới mà dùng lại session cũ do client gửi lên.
 # 5. Rate Limit: Bỏ qua hoàn toàn, cho phép gọi API liên tục.
 
+import time
+import base64
 import hashlib
-from datetime import datetime, timedelta
-from fastapi import HTTPException, status
 from fastapi import Request
 from sqlalchemy.orm import Session
+from datetime import datetime, timedelta
+from fastapi import HTTPException, status
 
 from src.services.base_auth_service import BaseAuthService
 from src.repositories.user_repository import UserRepository
 from src.repositories.token_repository import TokenRepository
-from src.utils.hash_util import verify_md5, hash_md5
+from src.utils.hash_util import hash_md5, verify_md5, verify_bcrypt, UnknownHashError
 from src.security.auth_provider import generate_mfa_secret, get_provisioning_uri, verify_mfa_token
 
 from src.security.jwt_handler import create_access_token
@@ -26,6 +28,8 @@ from src.security.jwt_handler import create_access_token
 from src.schemas.request.login_request import LoginRequest, MFAVerifyRequest, ForgotPasswordRequest, ResetPasswordRequest, GoogleSSORequest
 from src.schemas.response.auth_response import AuthResponse
 from src.models.user import User
+
+
 
 class VulnerableAuthService(BaseAuthService):
     def __init__(self):
@@ -35,33 +39,39 @@ class VulnerableAuthService(BaseAuthService):
     def login(self, db: Session, request: LoginRequest) -> AuthResponse:
         user = self.user_repo.get_by_username(db, request.username)
         
+        # Kiểm tra và phản hồi ngay nếu người dùng không tồn tại
         if not user:
             raise HTTPException(status_code=404, detail="Tài khoản không tồn tại")
             
-        from src.utils.hash_util import verify_bcrypt, verify_md5
+        # Giả lập thời gian xử lý nghiệp vụ cho tài khoản hợp lệ
+        time.sleep(0.5)
+            
+        # Hỗ trợ xác thực bằng nhiều thuật toán băm cũ và mới
         is_pass_valid = False
         try:
             is_pass_valid = verify_md5(request.password, user.password_hash) or verify_bcrypt(request.password, user.password_hash)
-        except:
+        except UnknownHashError:
             is_pass_valid = verify_md5(request.password, user.password_hash)
 
+        # Trả về thông báo chi tiết khi nhập sai mật khẩu
         if not is_pass_valid:
             raise HTTPException(status_code=401, detail="Sai mật khẩu")
 
+        # Đặt lại số lần đăng nhập sai khi thành công
         self.user_repo.update_failed_attempts(db, user, 0, False)
         
-        import base64
+        # Tạo định danh phiên làm việc từ tên người dùng
         raw_session_id = f"session_{user.username}"
         encoded_session_id = base64.b64encode(raw_session_id.encode()).decode('utf-8')
         
-        from src.utils.hash_util import hash_md5
+        # Thiết lập dữ liệu ghi nhớ trạng thái đăng nhập
         encoded_remember_token = None
         if request.remember_me:
-            raw_remember_data = f"{user.username}:{hash_md5(request.password)}"
+            # Đóng gói thông tin và mã hóa cơ bản
+            raw_remember_data = f"{user.username}-{hash_md5(request.password)}"
             encoded_remember_token = base64.b64encode(raw_remember_data.encode()).decode('utf-8')
         
-        
-        # Sinh JWT Token thực tế chứa thông tin User
+        # Cấp phát thẻ truy cập hệ thống
         access_token = create_access_token(
             data={"sub": user.username, "role": user.role.value}
         )
@@ -71,8 +81,8 @@ class VulnerableAuthService(BaseAuthService):
             session_id=encoded_session_id,
             role=user.role.value,
             remember_cookie=encoded_remember_token,
-            access_token=access_token,   # <-- Cấp JWT
-            token_type="bearer"          # <-- OAuth2
+            access_token=access_token,
+            token_type="bearer"
         )
         
     def setup_mfa(self, db: Session, username: str) -> dict:
@@ -95,8 +105,8 @@ class VulnerableAuthService(BaseAuthService):
         if verify_mfa_token(user.mfa_secret, request.otp_token):
             user.is_mfa_enabled = True
             db.commit()
-            return {"message": "✅ Xác thực MFA thành công!"}
-        raise HTTPException(status_code=401, detail="❌ Mã OTP không chính xác.")
+            return {"message": "Xác thực MFA thành công!"}
+        raise HTTPException(status_code=401, detail="Mã OTP không chính xác.")
 
     def forgot_password(self, db: Session, request: ForgotPasswordRequest, http_request: Request) -> dict:
         user = self.user_repo.get_by_username(db, request.username)
@@ -111,17 +121,16 @@ class VulnerableAuthService(BaseAuthService):
 
         poisoned_link = f"http://{client_host}/reset?token={reset_token}"
         
-        print(f"[EMAIL MOCK] Link khôi phục đã gửi: {poisoned_link}")
+        print(f"[EMAIL] Link khôi phục đã gửi: {poisoned_link}")
         return {
             "message": "Nếu tài khoản tồn tại, email khôi phục sẽ được gửi.", 
             "reset_link_demo": poisoned_link # Trả về để dễ test
         }
             
-        # Token MD5 dễ đoán và sống 10 năm
         reset_token = hashlib.md5(user.username.encode()).hexdigest()
         self.token_repo.create_token(db, user.id, reset_token, datetime.now() + timedelta(days=3650))
         
-        print(f"[EMAIL MOCK] Link khôi phục: http://127.0.0.1:8000/reset?token={reset_token}")
+        print(f"[EMAIL] Link khôi phục: http://127.0.0.1:8000/reset?token={reset_token}")
         return {"message": "Nếu tài khoản tồn tại, email khôi phục sẽ được gửi.", "token_khuyen_mai_de_demo": reset_token}
 
     def reset_password(self, db: Session, request: ResetPasswordRequest) -> dict:
@@ -130,8 +139,8 @@ class VulnerableAuthService(BaseAuthService):
             raise HTTPException(status_code=400, detail="Token không hợp lệ.")
             
         # Không kiểm tra hết hạn, không kiểm tra is_used, băm MD5
-        user = self.user_repo.get_by_username(db, "admin") # Lấy tạm từ DB
-        for u in db.query(user.__class__).all(): # Fix nhanh query
+        user = self.user_repo.get_by_username(db, "admin") 
+        for u in db.query(user.__class__).all(): 
             if u.id == token_record.user_id: user = u
             
         user.password_hash = hash_md5(request.new_password)
@@ -148,7 +157,7 @@ class VulnerableAuthService(BaseAuthService):
         access_token = create_access_token(data={"sub": user.username, "role": user.role.value})
         
         return AuthResponse(
-            message="Đăng nhập SSO thành công (Hệ thống bị lừa!)", 
+            message="Đăng nhập SSO thành công", 
             role=user.role.value,
             access_token=access_token,
             token_type="bearer"

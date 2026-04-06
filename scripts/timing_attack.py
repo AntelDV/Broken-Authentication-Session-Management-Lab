@@ -1,9 +1,6 @@
-# HƯỚNG DẪN ĐO ĐỘ LỆCH THỜI GIAN[cite: 54, 55]:
-# Workflow:
 # Vòng lặp 1: Gửi 50 request tới tài khoản 'admin' (Có trong DB) -> Tính Average Time 1.
 # Vòng lặp 2: Gửi 50 request tới tài khoản 'no_exist' (Không có trong DB) -> Tính Average Time 2.
 # Khẳng định lỗ hổng dựa trên Delta = (Time 1 - Time 2).
-
 
 import requests
 import time
@@ -24,12 +21,12 @@ def measure_time(username, password):
 def run_attack():
     print("⏱️ BẮT ĐẦU ĐO TIMING ATTACK ⏱️\n")
     
-    # 1. Đo tài khoản CÓ THẬT (sẽ tốn thời gian băm mật khẩu)
-    print(f"Đang gửi {NUM_REQUESTS} requests cho tài khoản CÓ THẬT (duong_test)...")
+    # Đo tài khoản đã tạo 
+    print(f"Đang gửi {NUM_REQUESTS} requests cho tài khoản thật...")
     time_exist = measure_time("duong_test", "wrong_password")
     
-    # 2. Đo tài khoản KHÔNG TỒN TẠI (sẽ văng lỗi ngay lập tức)
-    print(f"Đang gửi {NUM_REQUESTS} requests cho tài khoản KHÔNG TỒN TẠI (ghost_user)...")
+    # Đo tài khoản chưa tạo
+    print(f"Đang gửi {NUM_REQUESTS} requests cho tài khoản giả...")
     time_not_exist = measure_time("ghost_user", "wrong_password")
     
     print("\n📊 KẾT QUẢ ĐO ĐẠC:")
@@ -39,10 +36,10 @@ def run_attack():
     delta = abs(time_exist - time_not_exist)
     print(f"\n=> ĐỘ LỆCH THỜI GIAN (Delta): {delta:.4f} giây")
     
-    if delta > 0.003: # Chênh lệch hơn 3ms (0.003s) là đủ để Hacker phân biệt
-        print("🚨 KẾT LUẬN: HỆ THỐNG CÓ LỖ HỔNG TIMING ATTACK (Hacker có thể dò được User)!")
+    if delta > 0.003: 
+        print("🚨 KẾT LUẬN: HỆ THỐNG CÓ LỖ HỔNG TIMING ATTACK!")
     else:
-        print("🛡️ KẾT LUẬN: HỆ THỐNG AN TOÀN (Thời gian đã được cân bằng, không thể đoán được)!")
+        print("🛡️ KẾT LUẬN: HỆ THỐNG AN TOÀN!")
 
 if __name__ == "__main__":
     run_attack()

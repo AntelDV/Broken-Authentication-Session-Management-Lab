@@ -4,15 +4,13 @@
   --text-dark: #2d3748;
   --text-muted: #718096;
   --border-color: #e2e8f0;
-
-  /* Biến Động (Đỏ cho Lỗi - Xanh cho An Toàn) */
   --accent-color: #e53e3e;
   --accent-hover: #c53030;
   --accent-light: #fed7d7;
 }
 
 body.theme-secure {
-  --accent-color: #059669; /* Xanh Swagger UI */
+  --accent-color: #059669;
   --accent-hover: #047857;
   --accent-light: #d1fae5;
 }
@@ -23,7 +21,6 @@ body.theme-secure {
   padding: 0;
   font-family: "Roboto", "Segoe UI", sans-serif;
 }
-
 body {
   background-color: var(--bg-main);
   color: var(--text-dark);
@@ -34,7 +31,6 @@ body {
   transition: background-color 0.3s;
 }
 
-/* --- ANIMATIONS --- */
 .fade-in {
   animation: fadeIn 0.4s ease-out forwards;
 }
@@ -62,7 +58,7 @@ body {
   }
 }
 
-/* --- TOP BAR --- */
+/* TOP BAR */
 .top-bar {
   background: var(--bg-card);
   padding: 15px 40px;
@@ -91,8 +87,6 @@ body {
   color: var(--accent-color);
   font-size: 18px;
 }
-
-/* --- NÚT GẠT --- */
 .switch {
   position: relative;
   display: inline-block;
@@ -134,7 +128,7 @@ input:checked + .slider:before {
   transform: translateX(28px);
 }
 
-/* --- CONTAINER (FORM ĐĂNG NHẬP) --- */
+/* FORMS LOGIN */
 .container {
   background: var(--bg-card);
   width: 100%;
@@ -159,7 +153,6 @@ h2 {
   margin-bottom: 25px;
   font-size: 16px;
 }
-
 .input-group {
   margin-bottom: 25px;
 }
@@ -192,7 +185,6 @@ input:focus {
   box-shadow: 0 0 0 4px var(--accent-light);
   background-color: #fff;
 }
-
 .options-group {
   display: flex;
   justify-content: space-between;
@@ -224,7 +216,7 @@ input[type="checkbox"] {
   text-decoration: underline;
 }
 
-/* --- BUTTONS --- */
+/* BUTTONS */
 button {
   width: 100%;
   padding: 16px;
@@ -300,14 +292,14 @@ button {
 .divider::after {
   right: 0;
 }
-.mt-10 {
+.mt-15 {
   margin-top: 15px;
 }
 .mt-20 {
   margin-top: 25px;
 }
 
-/* THÔNG BÁO */
+/* TIỆN ÍCH CHUNG */
 .message {
   margin-top: 25px;
   padding: 18px;
@@ -339,24 +331,23 @@ button {
   background: #d1fae5;
   color: #065f46;
 }
+.badge.admin {
+  background: #fef08a;
+  color: #854d0e;
+  font-weight: bold;
+}
 
-/* --- DASHBOARD LAYOUT --- */
+/* ====================================================
+   KIẾN TRÚC DASHBOARD PHÂN QUYỀN RBAC
+==================================================== */
 .dashboard-layout {
   display: block;
 }
 .dashboard-container {
-  display: flex;
-  gap: 40px;
   padding: 40px;
-  max-width: 1500px;
+  max-width: 1400px;
   margin: 0 auto;
-  align-items: flex-start;
-}
-.main-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 35px;
+  width: 100%;
 }
 .info-card,
 .action-card {
@@ -375,74 +366,143 @@ button {
   padding-bottom: 10px;
 }
 
-/* BẢNG GIÁM SÁT KỸ THUẬT (SÁNG SỦA, TO RÕ) */
+/* THỐNG KÊ ADMIN */
+.admin-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 25px;
+  margin-bottom: 30px;
+}
+.stat-card {
+  background: var(--bg-card);
+  padding: 25px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+  border: 1px solid var(--border-color);
+  border-top: 4px solid var(--accent-color);
+  transition: border-color 0.3s;
+}
+.stat-icon {
+  font-size: 45px;
+  color: #cbd5e0;
+}
+.stat-data h4 {
+  color: var(--text-muted);
+  font-size: 15px;
+  margin-bottom: 5px;
+  text-transform: uppercase;
+  font-weight: bold;
+}
+.stat-data p {
+  font-size: 30px;
+  font-weight: 800;
+  color: var(--text-dark);
+  margin: 0;
+}
+
+/* BẢNG DỮ LIỆU ADMIN */
+.table-responsive {
+  overflow-x: auto;
+}
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+.admin-table th,
+.admin-table td {
+  padding: 16px;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 16px;
+}
+.admin-table th {
+  background: #f8fafc;
+  font-weight: bold;
+  color: var(--text-dark);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.admin-table tr:hover {
+  background: #f1f5f9;
+}
+.btn-action {
+  width: auto;
+  padding: 8px 12px;
+  font-size: 14px;
+  border-radius: 6px;
+  background: #e2e8f0;
+  color: #4a5568;
+  border: none;
+  cursor: pointer;
+  display: inline-block;
+}
+.btn-action.lock {
+  background: #fee2e2;
+  color: #c53030;
+}
+
+/* BẢNG DEBUG ẨN  */
 .inspector-panel {
-  width: 500px;
+  position: fixed;
+  right: 30px;
+  top: 100px;
+  z-index: 999;
+  height: 80vh;
+  width: 450px;
   background: #ffffff;
   color: var(--text-dark);
   border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+  box-shadow: -10px 10px 40px rgba(0, 0, 0, 0.2);
   border: 2px solid var(--accent-color);
   border-top: 8px solid var(--accent-color);
 }
 .inspector-header {
   background: #f8fafc;
-  padding: 20px 25px;
+  padding: 15px 25px;
   border-bottom: 2px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 .inspector-header h3 {
   margin: 0;
-  color: var(--text-dark);
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 800;
   border: none;
+  padding: 0;
 }
 .inspector-body {
-  padding: 30px 25px;
-  max-height: 75vh;
+  padding: 25px;
+  height: calc(100% - 60px);
   overflow-y: auto;
 }
-
 .data-group {
-  margin-bottom: 30px;
+  margin-bottom: 25px;
 }
 .data-group h4 {
-  color: var(--text-dark);
-  font-size: 16px;
-  margin-bottom: 12px;
+  font-size: 15px;
+  margin-bottom: 10px;
   font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
 }
-
 code,
 pre {
-  font-family: "Consolas", "Courier New", monospace !important;
+  font-family: "Consolas", monospace !important;
   background: #f1f5f9;
-  padding: 18px;
+  padding: 15px;
   border-radius: 8px;
   display: block;
-  font-size: 16px;
-  color: #e53e3e; /* Đỏ cho Vuln */
+  font-size: 15px;
+  color: #e53e3e;
   border: 1px solid var(--border-color);
   font-weight: bold;
+  word-break: break-all;
 }
 body.theme-secure code,
 body.theme-secure pre {
-  color: #059669; /* Xanh cho Secure */
-}
-
-.break-text {
-  word-break: break-all;
-}
-.data-box {
-  background: #f8fafc;
-  padding: 20px;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  font-size: 16px;
-  overflow-x: auto;
-  font-family: monospace;
-  font-weight: bold;
+  color: #059669;
 }

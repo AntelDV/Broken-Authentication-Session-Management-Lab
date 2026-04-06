@@ -25,13 +25,13 @@ class User(Base):
     email = Column(String(100), unique=True, index=True)
     role = Column(Enum(UserRole), default=UserRole.user)
 
-    # --- CÁC TRƯỜNG PHỤC VỤ PHÒNG THỦ BRUTE-FORCE (RATE LIMITING) ---
+    # --- RATE LIMITING ---
     failed_login_attempts = Column(Integer, default=0)
     last_failed_login = Column(DateTime(timezone=True), nullable=True)
     is_locked = Column(Boolean, default=False)
     locked_until = Column(DateTime(timezone=True), nullable=True)
 
-    # --- CÁC TRƯỜNG TÍCH HỢP BẢO MẬT 2 LỚP (MFA) ---
+    # ---  2 LỚP (MFA) ---
     mfa_secret = Column(String(32), nullable=True)
     is_mfa_enabled = Column(Boolean, default=False)
 

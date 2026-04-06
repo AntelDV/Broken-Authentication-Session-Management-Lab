@@ -1,5 +1,3 @@
-# WORKFLOW: Class Interface (Abstract) định nghĩa các hàm chuẩn (login, register).
-# CONCEPT: Ép buộc cả 2 bản Vulnerable và Secure phải code chung một bộ hàm để Controller dễ gọi.
 from fastapi import Request
 from abc import ABC, abstractmethod
 from sqlalchemy.orm import Session

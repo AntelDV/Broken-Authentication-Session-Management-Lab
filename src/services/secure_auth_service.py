@@ -1,11 +1,7 @@
 
-# 1. Băm mật khẩu: Dùng thư viện passlib (Bcrypt) sinh Salt động cho từng user[cite: 71].
-# 2. Chống Enumeration: Dù sai user hay sai pass, luông trả về ĐÚNG MỘT câu: "Tài khoản hoặc mật khẩu không chính xác"[cite: 73].
-# 3. Tái tạo phiên: Khi login thành công, xóa phiên cũ, gen ra một UUID4 mới hoàn toàn[cite: 72].
-# 4. Tích hợp với RateLimitMiddleware: Logic này sẽ được bảo vệ bởi bộ lọc chặn IP[cite: 75].
-
 import uuid
 import secrets
+import time
 from datetime import datetime, timedelta
 from fastapi import HTTPException, status
 from fastapi import Request
@@ -15,63 +11,75 @@ from passlib.exc import UnknownHashError
 from src.services.base_auth_service import BaseAuthService
 from src.repositories.user_repository import UserRepository
 from src.repositories.token_repository import TokenRepository
-from src.utils.hash_util import verify_bcrypt, hash_bcrypt
+from src.utils.hash_util import verify_bcrypt, hash_bcrypt, hash_md5
 from src.security.auth_provider import generate_mfa_secret, get_provisioning_uri, verify_mfa_token
 
 from src.security.jwt_handler import create_access_token
+from src.security.jwt_handler import verify_jwt_token
 
 from src.schemas.request.login_request import LoginRequest, MFAVerifyRequest, ForgotPasswordRequest, ResetPasswordRequest, GoogleSSORequest
 from src.schemas.response.auth_response import AuthResponse
 from src.models.user import User
+from src.utils.hash_util import verify_bcrypt, UnknownHashError
 
+             
 class SecureAuthService(BaseAuthService):
     def __init__(self):
         self.user_repo = UserRepository()
         self.token_repo = TokenRepository()
 
     def login(self, db: Session, request: LoginRequest) -> AuthResponse:
+        # Bắt đầu bấm giờ để tính toán độ trễ
+        start_time = time.time() 
+        
         user = self.user_repo.get_by_username(db, request.username)
+        
+        # Dùng chung một thông báo lỗi để che giấu thông tin chống Enumeration
         generic_error = HTTPException(status_code=401, detail="Tài khoản hoặc mật khẩu không chính xác")
 
         try:
-            if not user or user.is_locked:
+            # Kiểm tra tài khoản tồn tại hoặc bị khóa
+            if not user or user.is_locked: 
                 raise generic_error
-
+                
+            # Kiểm tra mật khẩu Bcrypt
             if not verify_bcrypt(request.password, user.password_hash):
                 attempts = user.failed_login_attempts + 1
                 self.user_repo.update_failed_attempts(db, user, attempts, attempts >= 5)
                 raise generic_error
                 
+            # Reset số lần sai nếu đăng nhập đúng
             self.user_repo.update_failed_attempts(db, user, 0, False)
-        except UnknownHashError:
-            raise generic_error
 
-        import secrets
-        remember_cookie = None
-        if request.remember_me:
-            remember_cookie = secrets.token_urlsafe(64)
+            # Tạo cookie ghi nhớ an toàn
+            remember_cookie = secrets.token_urlsafe(64) if request.remember_me else None
 
-        if user.is_mfa_enabled:
+            # Chặn lại đòi mã OTP nếu tài khoản có bật MFA
+            if user.is_mfa_enabled:
+                mfa_temp_token = create_access_token(data={"sub": user.username, "scope": "mfa_pending"})
+                return AuthResponse(
+                    message="Vui lòng nhập mã bảo mật để hoàn tất",
+                    require_mfa=True, 
+                    temp_token=mfa_temp_token, 
+                    remember_cookie=remember_cookie
+                )
+
+            # Cấp quyền truy cập nếu vượt qua mọi rào cản
+            access_token = create_access_token(data={"sub": user.username, "role": user.role.value})
             return AuthResponse(
-                message="Vui lòng nhập mã OTP để hoàn tất đăng nhập.",
-                require_mfa=True,
-                temp_token=user.username,
-                remember_cookie=remember_cookie
+                message="Đăng nhập thành công", 
+                session_id=str(uuid.uuid4()), 
+                role=user.role.value, 
+                remember_cookie=remember_cookie, 
+                access_token=access_token, 
+                token_type="bearer"
             )
-
-        # Sinh JWT Token thực tế chứa thông tin User
-        access_token = create_access_token(
-            data={"sub": user.username, "role": user.role.value}
-        )
-
-        return AuthResponse(
-            message="Đăng nhập thành công", 
-            session_id=str(uuid.uuid4()),  # <-- Tái tạo Session ID
-            role=user.role.value,
-            remember_cookie=remember_cookie,
-            access_token=access_token,   # <-- Cấp JWT
-            token_type="bearer"          # <-- OAuth2
-        )
+            
+        finally:
+            # Luôn bắt máy chủ đợi đủ 0.5 giây trước khi trả kết quả
+            elapsed = time.time() - start_time
+            if elapsed < 0.5:
+                time.sleep(0.5 - elapsed)
     
     
     def setup_mfa(self, db: Session, username: str) -> dict:
@@ -87,27 +95,28 @@ class SecureAuthService(BaseAuthService):
         }
 
     def verify_mfa(self, db: Session, request: MFAVerifyRequest) -> dict:
-        user = self.user_repo.get_by_username(db, request.username)
+        try:
+            payload = verify_jwt_token(request.username) 
+            if payload.get("scope") != "mfa_pending": raise Exception()
+            actual_username = payload.get("sub")
+        except Exception:
+            raise HTTPException(status_code=401, detail="Phiên xác thực OTP đã hết hạn hoặc không hợp lệ!")
+
+        user = self.user_repo.get_by_username(db, actual_username)
         if not user or not user.mfa_secret:
-            raise HTTPException(status_code=400, detail="MFA chưa được thiết lập cho tài khoản này.")
+            raise HTTPException(status_code=400, detail="MFA chưa được thiết lập.")
             
         if verify_mfa_token(user.mfa_secret, request.otp_token):
             user.is_mfa_enabled = True
             db.commit()
-            
-            import uuid
             from src.security.jwt_handler import create_access_token
             access_token = create_access_token(data={"sub": user.username, "role": user.role.value})
-            
             return {
-                "message": "✅ Xác thực MFA thành công!",
-                "session_id": str(uuid.uuid4()), 
-                "access_token": access_token,
-                "token_type": "bearer",
-                "role": user.role.value
+                "message": "Xác thực MFA thành công!", "session_id": str(uuid.uuid4()), 
+                "access_token": access_token, "token_type": "bearer", "role": user.role.value
             }
             
-        raise HTTPException(status_code=401, detail="❌ Mã OTP không chính xác.")
+        raise HTTPException(status_code=401, detail="Mã OTP không chính xác.")
 
     def forgot_password(self, db: Session, request: ForgotPasswordRequest, http_request: Request) -> dict:
         user = self.user_repo.get_by_username(db, request.username)
@@ -120,7 +129,7 @@ class SecureAuthService(BaseAuthService):
         SAFE_DOMAIN = "127.0.0.1:8000" 
         secure_link = f"http://{SAFE_DOMAIN}/reset?token={reset_token}"
         
-        print(f"[EMAIL MOCK] Link khôi phục an toàn: {secure_link}")
+        print(f"[EMAIL] Link khôi phục an toàn: {secure_link}")
         return {
             "message": "Nếu tài khoản tồn tại, email khôi phục sẽ được gửi.", 
             "reset_link_demo": secure_link
@@ -158,12 +167,13 @@ class SecureAuthService(BaseAuthService):
             raise HTTPException(status_code=404, detail="Email không tồn tại trong hệ thống")
 
         if user.is_mfa_enabled:
-            import secrets
+            from src.security.jwt_handler import create_access_token
+            mfa_temp_token = create_access_token(data={"sub": user.username, "scope": "mfa_pending"})
             return AuthResponse(
-                message="Xác thực SSO thành công. Vui lòng nhập mã OTP để hoàn tất.",
-                require_mfa=True,
-                temp_token=user.username,
-                remember_cookie=secrets.token_urlsafe(64)
+                message="Xác thực SSO thành công. Vui lòng nhập OTP để hoàn tất.",
+                require_mfa=True, 
+                temp_token=mfa_temp_token, 
+                remember_cookie=None
             )
 
         from src.security.jwt_handler import create_access_token
@@ -172,6 +182,6 @@ class SecureAuthService(BaseAuthService):
         return AuthResponse(
             message="Đăng nhập SSO thành công", 
             role=user.role.value,
-            access_token=access_token,
+            access_token=access_token, 
             token_type="bearer"
         )

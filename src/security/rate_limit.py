@@ -1,6 +1,4 @@
-# WORKFLOW: THUẬT TOÁN TOKEN BUCKET
-# CONCEPT: Một biến Dictionary/Redis lưu trữ { "IP_123": { "tokens": 5, "last_refill": timestamp } }
-# Hàm check_rate_limit(ip): Tính toán số token hiện tại dựa trên thời gian trôi qua, cập nhật và trả về True/False.
+
 import time
 from typing import Dict
 
@@ -19,7 +17,7 @@ class TokenBucket:
         refill_amount = int(time_passed / self.refill_time_sec)
         
         if refill_amount > 0:
-            # Hồi token nhưng không được vượt quá sức chứa (capacity)
+            # Hồi token nhưng không được vượt quá sức chứa 
             self.tokens = min(self.capacity, self.tokens + refill_amount)
             self.last_refill = now
         

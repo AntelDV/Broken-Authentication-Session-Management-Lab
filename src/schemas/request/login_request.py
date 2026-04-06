@@ -1,5 +1,4 @@
-# WORKFLOW: Định nghĩa cấu trúc dữ liệu bắt buộc Client phải gửi lên khi Login.
-# CONCEPT: Dùng Pydantic để Validate (ví dụ: username không được rỗng, password tối thiểu 6 ký tự).
+
 from pydantic import BaseModel, Field
 
 class LoginRequest(BaseModel):

@@ -1,5 +1,4 @@
-# WORKFLOW: Định nghĩa dữ liệu trả về sau khi Login thành công.
-# CONCEPT: Trả về Token hoặc SessionID, tuyệt đối không trả về thông tin nhạy cảm của User.
+
 from pydantic import BaseModel
 from typing import Optional
 

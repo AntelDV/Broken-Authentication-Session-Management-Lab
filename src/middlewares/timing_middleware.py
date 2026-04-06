@@ -1,7 +1,6 @@
-# WORKFLOW: CHỐNG/MÔ PHỎNG TIMING ATTACK.
 # CONCEPT:
 # Ở mode 'vulnerable': Đo thời gian từ lúc nhận request đến lúc xử lý xong hàm login, in ra log để thấy User tồn tại tốn nhiều ms hơn.
-# Ở mode 'secure': Tính toán thời gian xử lý thực, sau đó dùng `time.sleep(độ_trễ_bù_trừ)` để đảm bảo MỌI request đều mất đúng 500ms.
+# Ở mode 'secure': Tính toán thời gian xử lý thực, sau đó dùng time.sleep để đảm bảo MỌI request đều mất đúng 500ms.
 
 import time
 import asyncio
@@ -28,7 +27,6 @@ class TimingMiddleware(BaseHTTPMiddleware):
                 if delay > 0:
                     await asyncio.sleep(delay)
             else:
-                #  Cố tình in ra Terminal để nhóm bạn dễ quay video demo lỗi
                 print(f"[TIMING LEAK] Thời gian xử lý: {process_time:.4f} giây")
                 
             return response
