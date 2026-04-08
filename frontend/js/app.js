@@ -42,9 +42,8 @@ if (modeToggle) {
     localStorage.setItem("ui_mode", newMode);
     syncTheme();
 
-    // Gui yeu cau doi trang thai xuong may chu
     try {
-      await fetch("http://127.0.0.1:8000/api/system/switch-mode", {
+      await fetch("/api/system/switch-mode", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mode: newMode }),
@@ -71,12 +70,17 @@ function switchSection(hideElem, showElem) {
 document
   .getElementById("showForgotBtn")
   ?.addEventListener("click", () => switchSection(loginSection, forgotSection));
+
 document
   .getElementById("backToLoginBtn")
   ?.addEventListener("click", () => switchSection(forgotSection, loginSection));
-document
-  .getElementById("backToLoginFromMfa")
-  ?.addEventListener("click", () => switchSection(mfaSection, loginSection));
+
+// Xu ly xoa rong o OTP khi an nut quay lai man hinh dang nhap
+document.getElementById("backToLoginFromMfa")?.addEventListener("click", () => {
+  switchSection(mfaSection, loginSection);
+  const otpInput = document.getElementById("otpCode");
+  if (otpInput) otpInput.value = ""; // Xoa rong ma OTP cu
+});
 
 // Xu ly thong bao va luu tru phien lam viec
 const messageBox = document.getElementById("messageBox");
@@ -117,7 +121,8 @@ document
     );
 
     try {
-      const response = await fetch("http://127.0.0.1:8000/api/auth/login", {
+      // Da xoa http de fix CORS
+      const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -129,6 +134,11 @@ document
         if (data.require_mfa) {
           tempMfaUsername = data.temp_token;
           switchSection(loginSection, mfaSection);
+
+          // Xoa rong ma OTP cu khi form MFA hien len
+          const otpInput = document.getElementById("otpCode");
+          if (otpInput) otpInput.value = "";
+
           showMessage(
             '<i class="fas fa-mobile-alt"></i> Vui lòng nhập mã bảo mật',
             "success",
@@ -168,11 +178,11 @@ document.getElementById("ssoBtn")?.addEventListener("click", async function () {
     "success",
   );
   try {
-    const googleRes = await fetch(
-      `http://127.0.0.1:8000/api/auth/mock-google-token/${email}`,
-    );
+    // Da xoa http de fix CORS
+    const googleRes = await fetch(`/api/auth/mock-google-token/${email}`);
     const googleData = await googleRes.json();
-    const response = await fetch("http://127.0.0.1:8000/api/auth/sso/google", {
+
+    const response = await fetch("/api/auth/sso/google", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -181,11 +191,17 @@ document.getElementById("ssoBtn")?.addEventListener("click", async function () {
         google_id_token: googleData.google_id_token,
       }),
     });
+
     const data = await response.json();
     if (response.ok) {
       if (data.require_mfa) {
         tempMfaUsername = data.temp_token;
         switchSection(loginSection, mfaSection);
+
+        // Xoa rong ma OTP cu khi form MFA hien len
+        const otpInput = document.getElementById("otpCode");
+        if (otpInput) otpInput.value = "";
+
         showMessage(
           '<i class="fas fa-lock"></i> Yêu cầu xác minh thiết bị',
           "success",
@@ -220,18 +236,16 @@ document
     );
 
     try {
-      const response = await fetch(
-        "http://127.0.0.1:8000/api/auth/mfa/verify",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({
-            username: tempMfaUsername,
-            otp_token: otpCode,
-          }),
-        },
-      );
+      // Da xoa http de fix CORS
+      const response = await fetch("/api/auth/mfa/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          username: tempMfaUsername,
+          otp_token: otpCode,
+        }),
+      });
       const data = await response.json();
       if (response.ok) {
         showMessage(
@@ -240,8 +254,9 @@ document
         );
         saveDataAndRedirect(data, tempMfaUsername);
       } else {
+        // Hien thi chi tiet loi tra ve tu Backend
         showMessage(
-          '<i class="fas fa-times-circle"></i> Mã bảo mật sai',
+          `<i class="fas fa-times-circle"></i> ${data.detail || "Mã bảo mật sai"}`,
           "error",
         );
       }
@@ -290,7 +305,8 @@ async function loadDashboardData() {
 async function fetchAdminData() {
   const tbody = document.getElementById("adminTableBody");
   try {
-    const res = await fetch("http://127.0.0.1:8000/api/admin/users", {
+    // Da xoa http de fix CORS
+    const res = await fetch("/api/admin/users", {
       headers: { Authorization: `Bearer ${localStorage.getItem("auth_jwt")}` },
       credentials: "include",
     });
@@ -318,9 +334,12 @@ async function fetchAdminData() {
                     </tr>
                 `;
       });
+    } else {
+      tbody.innerHTML =
+        '<tr><td colspan="5">Lỗi trích xuất (Không có quyền truy cập).</td></tr>';
     }
   } catch (e) {
-    tbody.innerHTML = '<tr><td colspan="5">Lỗi trích xuất.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5">Lỗi kết nối máy chủ.</td></tr>';
   }
 }
 
@@ -334,7 +353,8 @@ document
 // Nut dang xuat he thong
 document.getElementById("logoutBtn")?.addEventListener("click", async () => {
   try {
-    await fetch("http://127.0.0.1:8000/api/auth/logout", {
+    // Da xoa http de fix CORS
+    await fetch("/api/auth/logout", {
       method: "POST",
       credentials: "include",
     });

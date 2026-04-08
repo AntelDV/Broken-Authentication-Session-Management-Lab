@@ -113,13 +113,12 @@ class SecureAuthService(BaseAuthService):
         user = self.user_repo.get_by_username(db, actual_username)
         
         if not user or user.is_locked:
-            raise HTTPException(status_code=401, detail="Tài khoản đã bị khóa do nhập sai quá nhiều lần. Vui lòng liên hệ Admin.")
+            raise HTTPException(status_code=401, detail="Tài khoản đã bị khóa do nhập sai OTP quá nhiều lần.")
 
         if not user.mfa_secret:
             raise HTTPException(status_code=400, detail="MFA chưa được thiết lập.")
             
         if verify_mfa_token(user.mfa_secret, request.otp_token):
-
             self.user_repo.update_failed_attempts(db, user, 0, False)
             user.is_mfa_enabled = True
             db.commit()
