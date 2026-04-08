@@ -13,17 +13,13 @@
   </head>
   <body class="theme-vulnerable dashboard-layout">
     <div class="top-bar">
-      <div class="brand"><i class="fas fa-university"></i> Cổng quản trị</div>
-
-      <div class="switch-container">
-        <span id="modeLabel"
-          ><i class="fas fa-exclamation-triangle"></i> Cảnh báo</span
-        >
-        <label class="switch">
-          <input type="checkbox" id="modeToggle" />
-          <span class="slider round"></span>
-        </label>
-      </div>
+        <div class="brand"><i class="fas fa-university"></i> Cổng quản trị</div>
+        
+        <div class="user-menu" style="display: flex; align-items: center;">
+            <span style="font-size: 18px; margin-right: 20px; font-weight: 600;"><i class="fas fa-user-circle"></i> Xin chào, <b id="welcomeName">Người dùng</b></span>
+            <button id="logoutBtn" class="btn-danger-small"><i class="fas fa-sign-out-alt"></i> Đăng xuất</button>
+        </div>
+    </div>
 
       <div class="user-menu" style="display: flex; align-items: center">
         <span style="font-size: 18px; margin-right: 20px; font-weight: 600"

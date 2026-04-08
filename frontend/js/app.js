@@ -292,6 +292,7 @@ async function fetchAdminData() {
   try {
     const res = await fetch("http://127.0.0.1:8000/api/admin/users", {
       headers: { Authorization: `Bearer ${localStorage.getItem("auth_jwt")}` },
+      credentials: "include",
     });
     const data = await res.json();
     if (res.ok) {

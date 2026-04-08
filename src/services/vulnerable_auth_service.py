@@ -20,7 +20,8 @@ from fastapi import HTTPException, status
 from src.services.base_auth_service import BaseAuthService
 from src.repositories.user_repository import UserRepository
 from src.repositories.token_repository import TokenRepository
-from src.utils.hash_util import hash_md5, verify_md5, verify_bcrypt, UnknownHashError
+from src.utils.hash_util import hash_md5, verify_md5, verify_bcrypt
+from passlib.exc import UnknownHashError 
 from src.security.auth_provider import generate_mfa_secret, get_provisioning_uri, verify_mfa_token
 
 from src.security.jwt_handler import create_access_token

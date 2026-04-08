@@ -11,7 +11,7 @@ from passlib.exc import UnknownHashError
 from src.services.base_auth_service import BaseAuthService
 from src.repositories.user_repository import UserRepository
 from src.repositories.token_repository import TokenRepository
-from src.utils.hash_util import verify_bcrypt, hash_bcrypt, hash_md5
+from src.utils.hash_util import verify_bcrypt, hash_bcrypt, hash_md5, verify_md5
 from src.security.auth_provider import generate_mfa_secret, get_provisioning_uri, verify_mfa_token
 
 from src.security.jwt_handler import create_access_token
@@ -20,7 +20,7 @@ from src.security.jwt_handler import verify_jwt_token
 from src.schemas.request.login_request import LoginRequest, MFAVerifyRequest, ForgotPasswordRequest, ResetPasswordRequest, GoogleSSORequest
 from src.schemas.response.auth_response import AuthResponse
 from src.models.user import User
-from src.utils.hash_util import verify_bcrypt, UnknownHashError
+from src.utils.hash_util import verify_bcrypt
 
              
 class SecureAuthService(BaseAuthService):
@@ -43,10 +43,18 @@ class SecureAuthService(BaseAuthService):
                 raise generic_error
                 
             # Kiểm tra mật khẩu Bcrypt
-            if not verify_bcrypt(request.password, user.password_hash):
+            is_pass_valid = False
+            try:
+                is_pass_valid = verify_bcrypt(request.password, user.password_hash)
+            except UnknownHashError:
+                # Nếu User này được tạo từ thời hệ thống còn yếu kém (dùng MD5)
+                is_pass_valid = verify_md5(request.password, user.password_hash)
+
+            if not is_pass_valid:
                 attempts = user.failed_login_attempts + 1
                 self.user_repo.update_failed_attempts(db, user, attempts, attempts >= 5)
                 raise generic_error
+            # ----------------------------------------------
                 
             # Reset số lần sai nếu đăng nhập đúng
             self.user_repo.update_failed_attempts(db, user, 0, False)
@@ -103,10 +111,16 @@ class SecureAuthService(BaseAuthService):
             raise HTTPException(status_code=401, detail="Phiên xác thực OTP đã hết hạn hoặc không hợp lệ!")
 
         user = self.user_repo.get_by_username(db, actual_username)
-        if not user or not user.mfa_secret:
+        
+        if not user or user.is_locked:
+            raise HTTPException(status_code=401, detail="Tài khoản đã bị khóa do nhập sai quá nhiều lần. Vui lòng liên hệ Admin.")
+
+        if not user.mfa_secret:
             raise HTTPException(status_code=400, detail="MFA chưa được thiết lập.")
             
         if verify_mfa_token(user.mfa_secret, request.otp_token):
+
+            self.user_repo.update_failed_attempts(db, user, 0, False)
             user.is_mfa_enabled = True
             db.commit()
             from src.security.jwt_handler import create_access_token
@@ -116,7 +130,13 @@ class SecureAuthService(BaseAuthService):
                 "access_token": access_token, "token_type": "bearer", "role": user.role.value
             }
             
-        raise HTTPException(status_code=401, detail="Mã OTP không chính xác.")
+        attempts = user.failed_login_attempts + 1
+        self.user_repo.update_failed_attempts(db, user, attempts, attempts >= 5)
+        
+        if attempts >= 5:
+            raise HTTPException(status_code=401, detail="Tài khoản đã bị khóa bảo vệ do nhập sai OTP 5 lần!")
+        else:
+            raise HTTPException(status_code=401, detail=f"Mã OTP không chính xác. Bạn còn {5 - attempts} lần thử.")
 
     def forgot_password(self, db: Session, request: ForgotPasswordRequest, http_request: Request) -> dict:
         user = self.user_repo.get_by_username(db, request.username)

@@ -1,46 +1,67 @@
-import os
-import sys
 import random
 from sqlalchemy.orm import Session
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-from src.config.database import SessionLocal
-from src.models.user import User
+from src.config.database import SessionLocal, engine
+from src.models.user import User, UserRole
 from src.utils.hash_util import hash_md5
+from src.security.auth_provider import generate_mfa_secret
 
-def seed_10000_users():
-    db: Session = SessionLocal()
-    print("🚀 Đang chuẩn bị tạo 10.000 Users...")
+COMMON_PASSWORDS = [
+    "123456", "password", "123456789", "12345", 
+    "admin123", "admin@123", "password123", "000000", "P@ssword123"
+]
 
-    common_passwords = ["123456", "password", "123456789", "12345", "admin123", "admin@123", "password123"]
-    hashed_passwords = [hash_md5(p) for p in common_passwords]
-    users_to_insert = []
+def seed_data():
+    print("⏳ Đang kết nối Database và nạp 10.000 User...")
     
-    # Tạo admin
-    for i in range(1, 6):
-        users_to_insert.append(User(
-            username=f"admin_{i}",
-            email=f"admin_{i}@lab.com",
-            password_hash=random.choice(hashed_passwords),
-            role="admin",  
-            is_locked=False
-        ))
-    # Tạo user
-    for i in range(1, 9996):
-        users_to_insert.append(User(
-            username=f"victim_{i}",
-            email=f"victim_{i}@lab.com",
-            password_hash=random.choice(hashed_passwords),
-            role="user",
-            is_locked=False
-        ))
-        if i % 2000 == 0: print(f"⏳ Đã chuẩn bị {i} users...")
+    db: Session = SessionLocal()
+    
+    try:
+        print("🧹 Đang dọn dẹp vùng nhớ cũ...")
+        db.query(User).delete()
+        db.commit()
 
-    print("💾 Đang đẩy vào Database ... Chờ vài giây!")
-    db.bulk_save_objects(users_to_insert) 
-    db.commit()
-    db.close()
-    print("✅ Xong!")
+        users_to_insert = []
+        
+        print("🛡️ Đang tạo 5 Admin ...")
+        for i in range(1, 6):
+            admin = User(
+                username=f"admin_{i}",
+                email=f"admin_{i}@lab.com",
+                password_hash=hash_md5("admin123"),
+                role=UserRole.admin,  
+                is_mfa_enabled=True,
+                mfa_secret=generate_mfa_secret(),
+                failed_login_attempts=0,
+                is_locked=False
+            )
+            users_to_insert.append(admin)
+
+        print("🎯 Đang tạo 10.000 User ...")
+        for i in range(1, 10001):
+            random_pass = random.choice(COMMON_PASSWORDS)
+            
+            user = User(
+                username=f"victim_{i}",
+                email=f"victim_{i}@lab.com",
+                password_hash=hash_md5(random_pass), 
+                role=UserRole.user, 
+                is_mfa_enabled=True, 
+                mfa_secret=generate_mfa_secret(),
+                failed_login_attempts=0,
+                is_locked=False
+            )
+            users_to_insert.append(user)
+
+        print("🚀 Đang ghi hàng loạt xuống CSDL...")
+        db.bulk_save_objects(users_to_insert)
+        db.commit()
+        
+        
+    except Exception as e:
+        print(f"❌ Có lỗi xảy ra trong quá trình nạp dữ liệu: {e}")
+        db.rollback()
+    finally:
+        db.close()
 
 if __name__ == "__main__":
-    seed_10000_users()
+    seed_data()
