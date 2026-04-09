@@ -12,17 +12,17 @@
     <link rel="stylesheet" href="css/style.css" />
   </head>
   <body class="theme-vulnerable dashboard-layout">
-    <div class="top-bar">
-        <div class="brand"><i class="fas fa-university"></i> Cổng quản trị</div>
-        
-        <div class="user-menu" style="display: flex; align-items: center;">...</div>
-    </div>
+    <div
+      class="top-bar"
+      style="display: flex; justify-content: space-between; align-items: center"
+    >
+      <div class="brand"><i class="fas fa-university"></i> Cổng quản trị</div>
 
       <div class="user-menu" style="display: flex; align-items: center">
-        <span style="font-size: 18px; margin-right: 20px; font-weight: 600"
-          ><i class="fas fa-user-circle"></i> Xin chào,
-          <b id="welcomeName">Người dùng</b></span
-        >
+        <span style="font-size: 18px; margin-right: 20px; font-weight: 600">
+          <i class="fas fa-user-circle"></i> Xin chào,
+          <b id="welcomeName">Người dùng</b>
+        </span>
         <button id="logoutBtn" class="btn-danger-small">
           <i class="fas fa-sign-out-alt"></i> Đăng xuất
         </button>
@@ -44,38 +44,6 @@
             Xác minh hai bước:
             <strong id="userMfaStatus" class="badge">Đang tải</strong>
           </p>
-        </div>
-
-        <div class="action-card mt-20" style="border-left: 5px solid #e53e3e">
-          <h3 style="color: #c53030; border-bottom: none">
-            <i class="fas fa-lock"></i> Khu vực giới hạn
-          </h3>
-          <p style="font-size: 17px; color: #718096; margin-bottom: 20px">
-            Chức năng này chỉ dành cho Ban quản trị. Bạn không có quyền truy cập
-            vào đây.
-          </p>
-          <button
-            id="btnUserAccessAdmin"
-            class="btn-outline"
-            style="border-color: #e2e8f0"
-          >
-            <i class="fas fa-database"></i> Truy cập dữ liệu nhân sự
-          </button>
-          <div
-            id="userErrorBox"
-            class="hidden mt-20"
-            style="
-              padding: 15px;
-              background: #fff5f5;
-              color: #c53030;
-              font-weight: bold;
-              border-radius: 8px;
-              border: 1px solid #feb2b2;
-            "
-          >
-            <i class="fas fa-ban"></i> Lỗi truy cập: Hệ thống từ chối yêu cầu.
-            Lịch sử vi phạm đã được ghi nhận.
-          </div>
         </div>
       </div>
 

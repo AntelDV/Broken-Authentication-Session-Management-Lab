@@ -1,5 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials 
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from typing import List
 
@@ -11,36 +10,42 @@ from src.security.jwt_handler import verify_jwt_token
 
 router = APIRouter(prefix="/api/admin", tags=["Admin (Modern JWT Auth)"])
 
-security = HTTPBearer(auto_error=False)
-
 @router.get("/users", response_model=List[UserProfileResponse])
 def get_all_users(
-    db: Session = Depends(get_db),
-    credentials: HTTPAuthorizationCredentials = Depends(security) 
+    request: Request,
+    db: Session = Depends(get_db)
 ):
-    if not credentials:
+    # Tìm Token trên Header 
+    auth_header = request.headers.get("Authorization")
+    token = None
+    
+    if auth_header and auth_header.startswith("Bearer "):
+        token = auth_header.split(" ")[1]
+    else:
+        # Nếu Header không có, tự động lục tìm trong Cookie 
+        token = request.cookies.get("auth_session_id")
+
+    # Chặn ngay nếu không cung cấp vé qua trạm
+    if not token:
         raise HTTPException(
             status_code=401, 
-            detail="Yêu cầu xác thực. Vui lòng cung cấp Bearer Token."
+            detail="Yêu cầu xác thực. Không tìm thấy Token trong Header hoặc Cookie."
         )
         
-    # Trích xuất chuỗi token từ Header
-    token = credentials.credentials
+    try:
+        # Đưa Token vào máy chém JWT để giải mã
+        payload = verify_jwt_token(token)
+        username = payload.get("sub")
+        user_role = payload.get("role")
+    except Exception:
+        raise HTTPException(status_code=401, detail="Cấu trúc Token không hợp lệ hoặc đã hết hạn.")
 
-    # Xác thực JWT Token
-    payload = verify_jwt_token(token)
-    username = payload.get("sub")
-    user_role = payload.get("role")
-
-    if not username:
-        raise HTTPException(status_code=401, detail="Cấu trúc Token không hợp lệ.")
-
-    # Kiểm tra phân quyền 
+    # Kiểm tra phân quyền - Chỉ Admin mới được đi tiếp
     if user_role != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Truy cập bị từ chối! Yêu cầu quyền Quản trị viên."
         )
 
-    # Nếu qua được khiên, trả về toàn bộ Database
+    # Nếu qua được khiên bảo vệ, trả về toàn bộ dữ liệu người dùng
     return db.query(User).all()

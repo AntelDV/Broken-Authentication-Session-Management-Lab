@@ -2,7 +2,6 @@
 # Client -> Controller (nhận LoginRequest) -> Chuyển vào Service tương ứng -> Nhận AuthResponse -> Client.
 # Controller làm nhiệm vụ "điều phối" (Routing).
 # Xử lý Request HTTP đầu vào cho Đăng nhập/Đăng ký.
-
 from fastapi import APIRouter, Depends, HTTPException, Response, Request
 from sqlalchemy.orm import Session
 from src.schemas.request.login_request import LoginRequest, MFAVerifyRequest, ForgotPasswordRequest, ResetPasswordRequest
@@ -25,23 +24,25 @@ def get_auth_service():
 def login(
     request_data: LoginRequest, 
     response: Response, 
+    request: Request, 
     db: Session = Depends(get_db),
     auth_service = Depends(get_auth_service)
 ):
     auth_result = auth_service.login(db, request_data)
-    
     is_prod = settings.ENVIRONMENT == "production"
 
     if settings.AUTH_MODE == "secure":
-        # Hardening Cookie & Thiết lập Timeout
+        
+        # Luôn sử dụng Session ID mới tinh do máy chủ tự sinh ra.
         if auth_result.session_id:
             response.set_cookie(
                 key="auth_session_id", value=auth_result.session_id,
-                httponly=True,       # Chống XSS đọc Cookie
-                secure=is_prod,      # Tự động bật cờ Secure (chỉ gửi qua HTTPS)
-                samesite="strict",   # Chống CSRF tuyệt đối
-                max_age=900          # 15 Phút Timeout tự động đăng xuất nếu không hoạt động
+                httponly=True,       # Chống mã độc XSS đánh cắp Cookie
+                secure=is_prod,      # Chỉ gửi qua kết nối mã hóa HTTPS
+                samesite="strict",   # Chống tấn công giả mạo yêu cầu 
+                max_age=900          # CWE-613: Insufficient Session Expiration. Ép hết hạn sau 15 phút.
             )
+            # Giấu ID thật đi, không cho xuất ra ngoài JSON
             auth_result.session_id = "[Đã bảo mật trong HttpOnly Cookie]"
             
         if auth_result.remember_cookie:
@@ -51,17 +52,25 @@ def login(
             )
             auth_result.remember_cookie = "[Bảo mật: Chuỗi ngẫu nhiên an toàn]"
     else:
-        # Session Persistence 
+        
+        # CWE-384: Session Fixation.
+        malicious_session_id = request.query_params.get("session_id")
+        if malicious_session_id:
+            auth_result.session_id = malicious_session_id
+
+        # CWE-613: Insufficient Session Expiration.
         if auth_result.session_id:
             response.set_cookie(
                 key="auth_session_id", value=auth_result.session_id,
-                httponly=False, secure=False, samesite="lax", 
-                max_age=34560000    
+                httponly=False,      # Để lộ Cookie cho mã độc Javascript đọc được
+                secure=False, 
+                samesite="lax", 
+                max_age=31536000     # Phiên sống tới 1 năm
             )
         if auth_result.remember_cookie:
             response.set_cookie(
                 key="remember_me", value=auth_result.remember_cookie,
-                httponly=False, secure=False, samesite="lax", max_age=34560000
+                httponly=False, secure=False, samesite="lax", max_age=31536000
             )
 
     return auth_result
@@ -73,7 +82,6 @@ def setup_mfa(username: str, db: Session = Depends(get_db), auth_service = Depen
 @router.post("/mfa/verify")
 def verify_mfa(request: MFAVerifyRequest, response: Response, db: Session = Depends(get_db), auth_service = Depends(get_auth_service)):
     result = auth_service.verify_mfa(db, request)
-    
     is_prod = settings.ENVIRONMENT == "production"
     session_id = result.get("session_id")
 
@@ -86,7 +94,7 @@ def verify_mfa(request: MFAVerifyRequest, response: Response, db: Session = Depe
     elif session_id:
         response.set_cookie(
             key="auth_session_id", value=session_id,
-            httponly=False, secure=False, samesite="lax", max_age=34560000
+            httponly=False, secure=False, samesite="lax", max_age=31536000
         )
         
     return result
@@ -94,18 +102,16 @@ def verify_mfa(request: MFAVerifyRequest, response: Response, db: Session = Depe
 @router.post("/password/forgot")
 def forgot_password(
     request_data: ForgotPasswordRequest, 
-    http_request: Request, # <-- Lấy gói tin HTTP để bóc Header
+    http_request: Request,
     db: Session = Depends(get_db), 
     auth_service = Depends(get_auth_service)
 ):
-    # Truyền thêm http_request xuống Service
     return auth_service.forgot_password(db, request_data, http_request)
 
 @router.post("/password/reset")
 def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db), auth_service = Depends(get_auth_service)):
     return auth_service.reset_password(db, request)
 
-# SSO
 @router.post("/sso/google", response_model=AuthResponse)
 def google_sso_login(
     request: GoogleSSORequest, 
@@ -116,15 +122,9 @@ def google_sso_login(
 
 @router.get("/mock-google-token/{email}")
 def get_mock_google_token(email: str):
-    """
-    giả lập máy chủ Google, 
-    trả về 1 ID Token có chữ ký hợp lệ cho email bạn nhập vào.
-    """
     from src.security.jwt_handler import create_access_token
-    # Nhét email vào Payload và ký
     token = create_access_token(data={"email": email, "iss": "accounts.google.com"})
     return {"google_id_token": token}
-
 
 @router.post("/logout")
 def logout(response: Response):
