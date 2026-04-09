@@ -8,29 +8,21 @@
 #    Nếu sai pass -> throw "Sai mật khẩu".
 # 4. Session Fixation: Khi login thành công, không tạo session_id mới mà dùng lại session cũ do client gửi lên.
 # 5. Rate Limit: Bỏ qua hoàn toàn, cho phép gọi API liên tục.
-
-import time
-import base64
-import hashlib
-from fastapi import Request
-from sqlalchemy.orm import Session
+import uuid
 from datetime import datetime, timedelta
-from fastapi import HTTPException, status
+from fastapi import HTTPException, Request
+from sqlalchemy.orm import Session
 
 from src.services.base_auth_service import BaseAuthService
 from src.repositories.user_repository import UserRepository
 from src.repositories.token_repository import TokenRepository
-from src.utils.hash_util import hash_md5, verify_md5, verify_bcrypt
-from passlib.exc import UnknownHashError 
+from src.utils.hash_util import hash_md5, verify_md5
 from src.security.auth_provider import generate_mfa_secret, get_provisioning_uri, verify_mfa_token
-
-from src.security.jwt_handler import create_access_token
+from src.security.jwt_handler import create_access_token, verify_jwt_token
 
 from src.schemas.request.login_request import LoginRequest, MFAVerifyRequest, ForgotPasswordRequest, ResetPasswordRequest, GoogleSSORequest
 from src.schemas.response.auth_response import AuthResponse
 from src.models.user import User
-
-
 
 class VulnerableAuthService(BaseAuthService):
     def __init__(self):
@@ -40,126 +32,131 @@ class VulnerableAuthService(BaseAuthService):
     def login(self, db: Session, request: LoginRequest) -> AuthResponse:
         user = self.user_repo.get_by_username(db, request.username)
         
-        # Kiểm tra và phản hồi ngay nếu người dùng không tồn tại
+        # CWE-203: Information Exposure Through Discrepancy.
+        # Trả về thông báo lỗi cụ thể giúp kẻ tấn công dò quét được tên đăng nhập nào có tồn tại.
         if not user:
-            raise HTTPException(status_code=404, detail="Tài khoản không tồn tại")
+            raise HTTPException(status_code=404, detail="Tài khoản không tồn tại trong hệ thống")
+
+        # CWE-327: Use of a Broken or Risky Cryptographic Algorithm .
+        # Hệ thống chỉ sử dụng MD5 để kiểm tra mật khẩu, dễ bị tấn công qua bảng băm \.
+        if not verify_md5(request.password, user.password_hash):
             
-        # Giả lập thời gian xử lý nghiệp vụ cho tài khoản hợp lệ
-        time.sleep(0.5)
-            
-        # Hỗ trợ xác thực bằng nhiều thuật toán băm cũ và mới
-        is_pass_valid = False
-        try:
-            is_pass_valid = verify_md5(request.password, user.password_hash) or verify_bcrypt(request.password, user.password_hash)
-        except UnknownHashError:
-            is_pass_valid = verify_md5(request.password, user.password_hash)
+            # CWE-307: Improper Restriction of Excessive Authentication Attempts.
+            # Khi nhập sai, hệ thống không hề đếm số lần sai hay khóa tài khoản -> brute force vô hạn
+            raise HTTPException(status_code=401, detail="Mật khẩu không chính xác")
 
-        # Trả về thông báo chi tiết khi nhập sai mật khẩu
-        if not is_pass_valid:
-            raise HTTPException(status_code=401, detail="Sai mật khẩu")
+        if user.is_mfa_enabled:
+            temp_token = create_access_token(data={"sub": user.username, "scope": "mfa_pending"})
+            return AuthResponse(
+                message="Yêu cầu xác thực MFA",
+                require_mfa=True, 
+                temp_token=temp_token
+            )
 
-        # Đặt lại số lần đăng nhập sai khi thành công
-        self.user_repo.update_failed_attempts(db, user, 0, False)
+        access_token = create_access_token(data={"sub": user.username, "role": user.role.value})
         
-        # Tạo định danh phiên làm việc từ tên người dùng
-        raw_session_id = f"session_{user.username}"
-        encoded_session_id = base64.b64encode(raw_session_id.encode()).decode('utf-8')
-        
-        # Thiết lập dữ liệu ghi nhớ trạng thái đăng nhập
-        encoded_remember_token = None
-        if request.remember_me:
-            # Đóng gói thông tin và mã hóa cơ bản
-            raw_remember_data = f"{user.username}-{hash_md5(request.password)}"
-            encoded_remember_token = base64.b64encode(raw_remember_data.encode()).decode('utf-8')
-        
-        # Cấp phát thẻ truy cập hệ thống
-        access_token = create_access_token(
-            data={"sub": user.username, "role": user.role.value}
-        )
-
+        # CWE-522: Insufficiently Protected Credentials
+        # Trả JWT trực tiếp qua thân dữ liệu của JSON, dẫn đến việc ứng dụng client 
+        # lưu trữ vào LocalStorage, tạo điều kiện cho tấn công XSS đánh cắp phiên.
         return AuthResponse(
             message="Đăng nhập thành công", 
-            session_id=encoded_session_id,
-            role=user.role.value,
-            remember_cookie=encoded_remember_token,
-            access_token=access_token,
+            session_id=str(uuid.uuid4()), 
+            role=user.role.value, 
+            access_token=access_token, 
             token_type="bearer"
         )
-        
-    def setup_mfa(self, db: Session, username: str) -> dict:
-        user = self.user_repo.get_by_username(db, username)
-        if not user:
-            raise HTTPException(status_code=404, detail="User không tồn tại")
-        if not user.mfa_secret:
-            user.mfa_secret = generate_mfa_secret()
-            db.commit()
-        return {
-            "message": "Vui lòng nhập đoạn mã Secret này vào Google Authenticator hoặc quét mã QR.",
-            "secret": user.mfa_secret,
-            "qr_uri": get_provisioning_uri(user.username, user.mfa_secret)
-        }
 
-    def verify_mfa(self, db: Session, request: MFAVerifyRequest) -> dict:
-        user = self.user_repo.get_by_username(db, request.username)
-        if not user or not user.mfa_secret:
-            raise HTTPException(status_code=400, detail="MFA chưa được thiết lập cho tài khoản này.")
-        if verify_mfa_token(user.mfa_secret, request.otp_token):
-            user.is_mfa_enabled = True
-            db.commit()
-            return {"message": "Xác thực MFA thành công!"}
-        raise HTTPException(status_code=401, detail="Mã OTP không chính xác.")
-
-    def forgot_password(self, db: Session, request: ForgotPasswordRequest, http_request: Request) -> dict:
-        user = self.user_repo.get_by_username(db, request.username)
-        if not user:
-            return {"message": "Nếu tài khoản tồn tại, email khôi phục sẽ được gửi."}
-            
-        reset_token = hashlib.md5(user.username.encode()).hexdigest()
-        self.token_repo.create_token(db, user.id, reset_token, datetime.now() + timedelta(days=3650))
-        
-        client_host = http_request.headers.get("host", "127.0.0.1:8000")
-        
-
-        poisoned_link = f"http://{client_host}/reset?token={reset_token}"
-        
-        print(f"[EMAIL] Link khôi phục đã gửi: {poisoned_link}")
-        return {
-            "message": "Nếu tài khoản tồn tại, email khôi phục sẽ được gửi.", 
-            "reset_link_demo": poisoned_link # Trả về để dễ test
-        }
-            
-        reset_token = hashlib.md5(user.username.encode()).hexdigest()
-        self.token_repo.create_token(db, user.id, reset_token, datetime.now() + timedelta(days=3650))
-        
-        print(f"[EMAIL] Link khôi phục: http://127.0.0.1:8000/reset?token={reset_token}")
-        return {"message": "Nếu tài khoản tồn tại, email khôi phục sẽ được gửi.", "token_khuyen_mai_de_demo": reset_token}
-
-    def reset_password(self, db: Session, request: ResetPasswordRequest) -> dict:
-        token_record = self.token_repo.get_token(db, request.token)
-        if not token_record:
-            raise HTTPException(status_code=400, detail="Token không hợp lệ.")
-            
-        # Không kiểm tra hết hạn, không kiểm tra is_used, băm MD5
-        user = self.user_repo.get_by_username(db, "admin") 
-        for u in db.query(user.__class__).all(): 
-            if u.id == token_record.user_id: user = u
-            
-        user.password_hash = hash_md5(request.new_password)
-        self.token_repo.mark_used(db, token_record)
-        return {"message": "Mật khẩu đã được đặt lại thành công!"}
-    
     def google_sso_login(self, db: Session, request: GoogleSSORequest) -> AuthResponse:
+        # CWE-290: Authentication Bypass by Spoofing.
+        # Hệ thống tin tưởng hoàn toàn vào trường email do client gửi lên thay vì 
+        # giải mã và xác thực chữ ký của google_id_token từ máy chủ Google.
         user = db.query(User).filter(User.email == request.email).first()
         
         if not user:
-            raise HTTPException(status_code=404, detail="Email không tồn tại trong hệ thống")
+            raise HTTPException(status_code=404, detail="Email chưa được đăng ký")
 
-        from src.security.jwt_handler import create_access_token
+        # CWE-306: Missing Authentication for Critical Function.
+        # Hệ thống bỏ qua hoàn toàn việc kiểm tra trạng thái MFA đối với luồng SSO.
+        # Kẻ tấn công có thể giả mạo email để đi thẳng vào hệ thống mà không cần mã OTP.
         access_token = create_access_token(data={"sub": user.username, "role": user.role.value})
         
         return AuthResponse(
             message="Đăng nhập SSO thành công", 
             role=user.role.value,
-            access_token=access_token,
+            access_token=access_token, 
             token_type="bearer"
         )
+
+    def verify_mfa(self, db: Session, request: MFAVerifyRequest) -> dict:
+        try:
+            payload = verify_jwt_token(request.username) 
+            actual_username = payload.get("sub")
+        except Exception:
+            raise HTTPException(status_code=401, detail="Token không hợp lệ")
+
+        user = self.user_repo.get_by_username(db, actual_username)
+
+        if not user.mfa_secret:
+            raise HTTPException(status_code=400, detail="MFA chưa được thiết lập")
+            
+        if verify_mfa_token(user.mfa_secret, request.otp_token):
+            access_token = create_access_token(data={"sub": user.username, "role": user.role.value})
+            return {
+                "message": "Xác thực MFA thành công", 
+                "session_id": str(uuid.uuid4()), 
+                "access_token": access_token, 
+                "token_type": "bearer", 
+                "role": user.role.value
+            }
+            
+        # CWE-307: Improper Restriction of Excessive Authentication Attempts.
+        raise HTTPException(status_code=401, detail="Mã OTP không chính xác")
+
+    def setup_mfa(self, db: Session, username: str) -> dict:
+        user = self.user_repo.get_by_username(db, username)
+        if not user: 
+            raise HTTPException(status_code=404, detail="Tài khoản không tồn tại")
+            
+        if not user.mfa_secret:
+            user.mfa_secret = generate_mfa_secret()
+            db.commit()
+            
+        return {
+            "message": "Mã thiết lập MFA",
+            "secret": user.mfa_secret,
+            "qr_uri": get_provisioning_uri(user.username, user.mfa_secret)
+        }
+
+    def forgot_password(self, db: Session, request: ForgotPasswordRequest, http_request: Request) -> dict:
+        user = self.user_repo.get_by_username(db, request.username)
+        
+        # danh sách tài khoản hợp lệ qua tính năng quên mật khẩu.
+        if not user:
+            raise HTTPException(status_code=404, detail="Tài khoản không tồn tại")
+            
+        import random
+        import string
+        # CWE-330: Use of Insufficiently Random Values
+        # Mã khôi phục mật khẩu quá ngắn và dễ đoán
+        weak_reset_token = ''.join(random.choices(string.digits, k=6))
+        self.token_repo.create_token(db, user.id, weak_reset_token, datetime.now() + timedelta(minutes=60))
+  
+        return {
+            "message": "Email khôi phục đã được gửi", 
+            "reset_link_demo": f"http://127.0.0.1:8000/reset?token={weak_reset_token}"
+        }
+
+    def reset_password(self, db: Session, request: ResetPasswordRequest) -> dict:
+        token_record = self.token_repo.get_token(db, request.token)
+        if not token_record or token_record.is_used:
+            raise HTTPException(status_code=400, detail="Token không hợp lệ hoặc đã sử dụng")
+            
+        user = self.user_repo.get_by_username(db, "admin") 
+        for u in db.query(user.__class__).all():
+            if u.id == token_record.user_id: 
+                user = u
+            
+        # CWE-327: Cập nhật mật khẩu mới nhưng vẫn băm bằng thuật toán yếu MD5.
+        user.password_hash = hash_md5(request.new_password)
+        self.token_repo.mark_used(db, token_record)
+        return {"message": "Mật khẩu đã được cập nhật"}

@@ -10,3 +10,5 @@ aiohttp
 pymysql 
 cryptography
 pyotp
+requests
+psutil

@@ -14,7 +14,6 @@ function syncTheme() {
     if (modeLabel)
       modeLabel.innerHTML =
         '<i class="fas fa-shield-check"></i> Chế độ an toàn';
-
     const statusText = document.getElementById("serverStatusText");
     if (statusText) {
       statusText.textContent = "An toàn";
@@ -26,7 +25,6 @@ function syncTheme() {
     if (modeLabel)
       modeLabel.innerHTML =
         '<i class="fas fa-exclamation-triangle"></i> Cảnh báo lỗi';
-
     const statusText = document.getElementById("serverStatusText");
     if (statusText) {
       statusText.textContent = "Nguy hiểm";
@@ -70,21 +68,19 @@ function switchSection(hideElem, showElem) {
 document
   .getElementById("showForgotBtn")
   ?.addEventListener("click", () => switchSection(loginSection, forgotSection));
-
 document
   .getElementById("backToLoginBtn")
   ?.addEventListener("click", () => switchSection(forgotSection, loginSection));
-
-// Xu ly xoa rong o OTP khi an nut quay lai man hinh dang nhap
 document.getElementById("backToLoginFromMfa")?.addEventListener("click", () => {
   switchSection(mfaSection, loginSection);
   const otpInput = document.getElementById("otpCode");
-  if (otpInput) otpInput.value = ""; // Xoa rong ma OTP cu
+  if (otpInput) otpInput.value = "";
 });
 
 // Xu ly thong bao va luu tru phien lam viec
 const messageBox = document.getElementById("messageBox");
-let tempMfaUsername = "";
+let tempMfaToken = ""; // Luu Token MFA tam thoi
+let currentAuthUsername = ""; // BIẾN MỚI: Luu ten user chinh xac de hien thi, khong dung JWT
 
 function showMessage(msg, type) {
   if (!messageBox) return;
@@ -94,11 +90,22 @@ function showMessage(msg, type) {
 }
 
 function saveDataAndRedirect(data, username) {
+  // Luu ten nguoi dung de hien thi tren Header
   localStorage.setItem("auth_username", username);
   localStorage.setItem("auth_role", data.role || "user");
-  if (data.access_token) {
-    localStorage.setItem("auth_jwt", data.access_token);
+  const savedMode = localStorage.getItem("ui_mode") || "vulnerable";
+
+  // VÁ LỖI LỘ TOKEN (XSS):
+  if (savedMode === "secure") {
+    // 1. O che do An toan: Xoa sach Token, buoc he thong chi su dung HttpOnly Cookie ngam!
+    localStorage.removeItem("auth_jwt");
+  } else {
+    // 2. O che do Canh bao: Luu Token ho henh ra ngoai de Hacker co the copy duoc trong F12
+    if (data.access_token) {
+      localStorage.setItem("auth_jwt", data.access_token);
+    }
   }
+
   setTimeout(() => {
     window.location.href = "dashboard.html";
   }, 800);
@@ -113,6 +120,7 @@ document
     const password = document.getElementById("password").value;
     const rememberMe = document.getElementById("rememberMe").checked;
 
+    currentAuthUsername = username; // Luu lai ten vua nhap
     const loginBtn = document.getElementById("loginBtn");
     loginBtn.disabled = true;
     showMessage(
@@ -121,7 +129,6 @@ document
     );
 
     try {
-      // Da xoa http de fix CORS
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -132,13 +139,10 @@ document
 
       if (response.ok) {
         if (data.require_mfa) {
-          tempMfaUsername = data.temp_token;
+          tempMfaToken = data.temp_token;
           switchSection(loginSection, mfaSection);
-
-          // Xoa rong ma OTP cu khi form MFA hien len
           const otpInput = document.getElementById("otpCode");
           if (otpInput) otpInput.value = "";
-
           showMessage(
             '<i class="fas fa-mobile-alt"></i> Vui lòng nhập mã bảo mật',
             "success",
@@ -148,7 +152,7 @@ document
             '<i class="fas fa-check-circle"></i> Đăng nhập thành công',
             "success",
           );
-          saveDataAndRedirect(data, username);
+          saveDataAndRedirect(data, currentAuthUsername);
         }
       } else {
         showMessage(
@@ -173,12 +177,14 @@ document.getElementById("ssoBtn")?.addEventListener("click", async function () {
     );
     return;
   }
+
+  currentAuthUsername = email; // Luu lai email vua nhap
   showMessage(
     '<i class="fas fa-spinner fa-spin"></i> Chờ xác nhận từ Google...',
     "success",
   );
+
   try {
-    // Da xoa http de fix CORS
     const googleRes = await fetch(`/api/auth/mock-google-token/${email}`);
     const googleData = await googleRes.json();
 
@@ -195,13 +201,10 @@ document.getElementById("ssoBtn")?.addEventListener("click", async function () {
     const data = await response.json();
     if (response.ok) {
       if (data.require_mfa) {
-        tempMfaUsername = data.temp_token;
+        tempMfaToken = data.temp_token;
         switchSection(loginSection, mfaSection);
-
-        // Xoa rong ma OTP cu khi form MFA hien len
         const otpInput = document.getElementById("otpCode");
         if (otpInput) otpInput.value = "";
-
         showMessage(
           '<i class="fas fa-lock"></i> Yêu cầu xác minh thiết bị',
           "success",
@@ -211,7 +214,7 @@ document.getElementById("ssoBtn")?.addEventListener("click", async function () {
           '<i class="fab fa-google"></i> Xác nhận thành công',
           "success",
         );
-        saveDataAndRedirect(data, email);
+        saveDataAndRedirect(data, currentAuthUsername);
       }
     } else {
       showMessage(
@@ -236,15 +239,11 @@ document
     );
 
     try {
-      // Da xoa http de fix CORS
       const response = await fetch("/api/auth/mfa/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({
-          username: tempMfaUsername,
-          otp_token: otpCode,
-        }),
+        body: JSON.stringify({ username: tempMfaToken, otp_token: otpCode }),
       });
       const data = await response.json();
       if (response.ok) {
@@ -252,9 +251,9 @@ document
           '<i class="fas fa-shield-check"></i> Xác minh thành công',
           "success",
         );
-        saveDataAndRedirect(data, tempMfaUsername);
+        // Tra ten nguoi dung dang hoang thay vi token
+        saveDataAndRedirect(data, currentAuthUsername);
       } else {
-        // Hien thi chi tiet loi tra ve tu Backend
         showMessage(
           `<i class="fas fa-times-circle"></i> ${data.detail || "Mã bảo mật sai"}`,
           "error",
@@ -276,10 +275,8 @@ async function loadDashboardData() {
     return;
   }
   syncTheme();
-
   document.getElementById("welcomeName").textContent = username;
 
-  // Hien thi giao dien theo phan quyen User hoac Admin
   if (role === "admin") {
     document.getElementById("adminView").classList.remove("hidden");
     document.getElementById("userView").classList.add("hidden");
@@ -305,10 +302,16 @@ async function loadDashboardData() {
 async function fetchAdminData() {
   const tbody = document.getElementById("adminTableBody");
   try {
-    // Da xoa http de fix CORS
+    const headers = {};
+    const token = localStorage.getItem("auth_jwt");
+    if (token) {
+      // Chi gui kem Token neu dang o che do Vuln
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
     const res = await fetch("/api/admin/users", {
-      headers: { Authorization: `Bearer ${localStorage.getItem("auth_jwt")}` },
-      credentials: "include",
+      headers: headers,
+      credentials: "include", // Luon gui kem HttpOnly Cookie neu dang o Secure
     });
     const data = await res.json();
     if (res.ok) {
@@ -322,42 +325,35 @@ async function fetchAdminData() {
           ? '<i class="fas fa-check-circle" style="color:var(--accent-color)"></i>'
           : "-";
         tbody.innerHTML += `
-                    <tr>
-                        <td><strong>${u.username}</strong></td>
-                        <td>${u.email}</td>
-                        <td>${roleBadge}</td>
-                        <td style="text-align:center">${mfaBadge}</td>
-                        <td>
-                            <button class="btn-action"><i class="fas fa-edit"></i> Sửa</button>
-                            <button class="btn-action lock"><i class="fas fa-ban"></i> Khóa</button>
-                        </td>
-                    </tr>
-                `;
+            <tr>
+                <td><strong>${u.username}</strong></td>
+                <td>${u.email}</td>
+                <td>${roleBadge}</td>
+                <td style="text-align:center">${mfaBadge}</td>
+                <td>
+                    <button class="btn-action"><i class="fas fa-edit"></i> Sửa</button>
+                    <button class="btn-action lock"><i class="fas fa-ban"></i> Khóa</button>
+                </td>
+            </tr>`;
       });
     } else {
       tbody.innerHTML =
-        '<tr><td colspan="5">Lỗi trích xuất (Không có quyền truy cập).</td></tr>';
+        '<tr><td colspan="5">Lỗi phân quyền (Từ chối truy cập).</td></tr>';
     }
   } catch (e) {
     tbody.innerHTML = '<tr><td colspan="5">Lỗi kết nối máy chủ.</td></tr>';
   }
 }
 
-// User nhan nut quan tri hien thi loi
 document
   .getElementById("btnUserAccessAdmin")
   ?.addEventListener("click", function () {
     document.getElementById("userErrorBox").classList.remove("hidden");
   });
 
-// Nut dang xuat he thong
 document.getElementById("logoutBtn")?.addEventListener("click", async () => {
   try {
-    // Da xoa http de fix CORS
-    await fetch("/api/auth/logout", {
-      method: "POST",
-      credentials: "include",
-    });
+    await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
   } catch (e) {}
   localStorage.clear();
   window.location.href = "/";
