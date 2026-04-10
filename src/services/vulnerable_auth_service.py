@@ -128,7 +128,10 @@ class VulnerableAuthService(BaseAuthService):
         }
 
     def forgot_password(self, db: Session, request: ForgotPasswordRequest, http_request: Request) -> dict:
-        user = self.user_repo.get_by_username(db, request.username)
+        user = db.query(User).filter(User.email == request.username).first()
+        # Nếu tìm Email không ra, thì thử tìm theo Username dự phòng
+        if not user:
+            user = self.user_repo.get_by_username(db, request.username)
         
         # CWE-203: Lộ lọt thông tin người dùng
         if not user:
@@ -140,8 +143,8 @@ class VulnerableAuthService(BaseAuthService):
         weak_reset_token = ''.join(random.choices(string.digits, k=6))
         self.token_repo.create_token(db, user.id, weak_reset_token, datetime.now() + timedelta(minutes=60))
   
-        # CWE-644: Host Header Injection -> Password Reset Poisoning
-        host_header = http_request.headers.get("host")
+        # CWE-644: Host Header Injection (Password Reset Poisoning)
+        host_header = http_request.headers.get("host") 
         poisoned_link = f"http://{host_header}/reset?token={weak_reset_token}"
         
         return {

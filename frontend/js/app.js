@@ -53,23 +53,39 @@ const mfaSection = document.getElementById("mfaSection");
 const forgotSection = document.getElementById("forgotSection");
 
 function switchSection(hideElem, showElem) {
-  hideElem.classList.add("hidden");
-  showElem.classList.remove("hidden");
-  showElem.classList.add("fade-in");
+  if (hideElem) hideElem.classList.add("hidden");
+  if (showElem) {
+    showElem.classList.remove("hidden");
+    showElem.classList.add("fade-in");
+  }
   document.getElementById("messageBox")?.classList.add("hidden");
 }
 
+// ------------------------------------------------------------------
+// ĐÃ VÁ LỖI CỰC KỲ QUAN TRỌNG: TRÁNH BỊ DẤU # VÀ MẤT FORM
+// ------------------------------------------------------------------
 document
   .getElementById("showForgotBtn")
-  ?.addEventListener("click", () => switchSection(loginSection, forgotSection));
+  ?.addEventListener("click", function (e) {
+    e.preventDefault();
+    switchSection(loginSection, forgotSection);
+  });
+
 document
   .getElementById("backToLoginBtn")
-  ?.addEventListener("click", () => switchSection(forgotSection, loginSection));
-document.getElementById("backToLoginFromMfa")?.addEventListener("click", () => {
-  switchSection(mfaSection, loginSection);
-  const otpInput = document.getElementById("otpCode");
-  if (otpInput) otpInput.value = "";
-});
+  ?.addEventListener("click", function (e) {
+    e.preventDefault();
+    switchSection(forgotSection, loginSection);
+  });
+
+document
+  .getElementById("backToLoginFromMfa")
+  ?.addEventListener("click", function (e) {
+    e.preventDefault();
+    switchSection(mfaSection, loginSection);
+    const otpInput = document.getElementById("otpCode");
+    if (otpInput) otpInput.value = "";
+  });
 
 const messageBox = document.getElementById("messageBox");
 let tempMfaToken = "";
@@ -99,6 +115,9 @@ function saveDataAndRedirect(data, username) {
   }, 800);
 }
 
+// ------------------------------------------------------------------
+// API LOGIN
+// ------------------------------------------------------------------
 document
   .getElementById("loginForm")
   ?.addEventListener("submit", async function (e) {
@@ -155,6 +174,9 @@ document
     }
   });
 
+// ------------------------------------------------------------------
+// API MFA
+// ------------------------------------------------------------------
 document
   .getElementById("mfaForm")
   ?.addEventListener("submit", async function (e) {
@@ -191,62 +213,130 @@ document
     }
   });
 
-document.getElementById("ssoBtn")?.addEventListener("click", async function () {
-  const email = document.getElementById("username").value;
-  if (!email.includes("@")) {
+// ------------------------------------------------------------------
+// API SSO GOOGLE
+// ------------------------------------------------------------------
+document
+  .getElementById("ssoBtn")
+  ?.addEventListener("click", async function (e) {
+    e.preventDefault();
+    const email = document.getElementById("username").value;
+    if (!email.includes("@")) {
+      showMessage(
+        '<i class="fas fa-exclamation-triangle"></i> Vui lòng nhập Email',
+        "error",
+      );
+      return;
+    }
+    currentAuthUsername = email;
     showMessage(
-      '<i class="fas fa-exclamation-triangle"></i> Vui lòng nhập Email',
-      "error",
+      '<i class="fas fa-spinner fa-spin"></i> Chờ xác nhận...',
+      "success",
     );
-    return;
-  }
-  currentAuthUsername = email;
-  showMessage(
-    '<i class="fas fa-spinner fa-spin"></i> Chờ xác nhận...',
-    "success",
-  );
-  try {
-    const googleRes = await fetch(`/api/auth/mock-google-token/${email}`);
-    const googleData = await googleRes.json();
+    try {
+      const googleRes = await fetch(`/api/auth/mock-google-token/${email}`);
+      const googleData = await googleRes.json();
 
-    const urlParams = window.location.search;
+      const urlParams = window.location.search;
 
-    const response = await fetch("/api/auth/sso/google" + urlParams, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({
-        email: email,
-        google_id_token: googleData.google_id_token,
-      }),
-    });
-    const data = await response.json();
-    if (response.ok) {
-      if (data.require_mfa) {
-        tempMfaToken = data.temp_token;
-        switchSection(loginSection, mfaSection);
+      const response = await fetch("/api/auth/sso/google" + urlParams, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          email: email,
+          google_id_token: googleData.google_id_token,
+        }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        if (data.require_mfa) {
+          tempMfaToken = data.temp_token;
+          switchSection(loginSection, mfaSection);
+          showMessage(
+            '<i class="fas fa-lock"></i> Yêu cầu xác minh thiết bị',
+            "success",
+          );
+        } else {
+          showMessage(
+            '<i class="fab fa-google"></i> Xác nhận thành công',
+            "success",
+          );
+          saveDataAndRedirect(data, currentAuthUsername);
+        }
+      } else {
         showMessage(
-          '<i class="fas fa-lock"></i> Yêu cầu xác minh thiết bị',
+          '<i class="fas fa-times-circle"></i> Tài khoản không hợp lệ',
+          "error",
+        );
+      }
+    } catch (err) {
+      showMessage('<i class="fas fa-wifi"></i> Lỗi kết nối Google', "error");
+    }
+  });
+
+// ------------------------------------------------------------------
+// API QUÊN MẬT KHẨU
+// ------------------------------------------------------------------
+document
+  .getElementById("forgotForm")
+  ?.addEventListener("submit", async function (e) {
+    e.preventDefault(); // Chặn hành vi load lại trang
+
+    const emailInput =
+      document.getElementById("forgotEmail") ||
+      document.getElementById("forgotUsername") ||
+      document.querySelector('#forgotSection input[type="text"]');
+    const email = emailInput ? emailInput.value : "";
+
+    if (!email) {
+      showMessage(
+        '<i class="fas fa-exclamation-triangle"></i> Vui lòng nhập Email',
+        "error",
+      );
+      return;
+    }
+
+    showMessage(
+      '<i class="fas fa-spinner fa-spin"></i> Đang gửi yêu cầu...',
+      "success",
+    );
+
+    try {
+      const response = await fetch("/api/auth/password/forgot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: email }),
+      });
+      const data = await response.json();
+
+      if (response.ok) {
+        const linkDemo = data.reset_link_demo || "#";
+        showMessage(
+          `
+          <i class="fas fa-envelope"></i> ${data.message}
+          <div style="margin-top:12px; padding:10px; background:#f3f4f6; border-left: 4px solid #e53e3e; border-radius:4px; font-size:13px; word-break: break-all; color: #333;">
+            <b>[Email gửi tới]:</b><br>
+            <i>Hãy nhấp vào đường dẫn bên dưới để đặt lại mật khẩu:</i><br>
+            <a href="${linkDemo}" style="color:#d97706; font-weight: bold;">${linkDemo}</a>
+          </div>
+        `,
           "success",
         );
       } else {
         showMessage(
-          '<i class="fab fa-google"></i> Xác nhận thành công',
-          "success",
+          `<i class="fas fa-times-circle"></i> ${data.detail || "Không thể gửi yêu cầu"}`,
+          "error",
         );
-        saveDataAndRedirect(data, currentAuthUsername);
       }
-    } else {
-      showMessage(
-        '<i class="fas fa-times-circle"></i> Tài khoản không hợp lệ',
-        "error",
-      );
+    } catch (error) {
+      showMessage('<i class="fas fa-wifi"></i> Lỗi kết nối mạng', "error");
     }
-  } catch (e) {
-    showMessage('<i class="fas fa-wifi"></i> Lỗi kết nối Google', "error");
-  }
-});
+  });
 
+// ------------------------------------------------------------------
+// HÀM DASHBOARD CỦA GIAO DIỆN BÊN TRONG
+// ------------------------------------------------------------------
 async function loadDashboardData() {
   const username = localStorage.getItem("auth_username");
   const role = localStorage.getItem("auth_role");
@@ -257,30 +347,37 @@ async function loadDashboardData() {
   }
 
   syncTheme();
-  document.getElementById("welcomeName").textContent = username;
+  const welcomeName = document.getElementById("welcomeName");
+  if (welcomeName) welcomeName.textContent = username;
+
+  const adminView = document.getElementById("adminView");
+  const userView = document.getElementById("userView");
 
   if (role === "admin") {
-    document.getElementById("adminView").classList.remove("hidden");
-    document.getElementById("userView").classList.add("hidden");
+    if (adminView) adminView.classList.remove("hidden");
+    if (userView) userView.classList.add("hidden");
     fetchAdminData();
   } else {
-    document.getElementById("userView").classList.remove("hidden");
-    document.getElementById("adminView").classList.add("hidden");
+    if (userView) userView.classList.remove("hidden");
+    if (adminView) adminView.classList.add("hidden");
     const mfaElem = document.getElementById("userMfaStatus");
-    if (savedMode === "secure") {
-      mfaElem.innerHTML = '<i class="fas fa-check"></i> Đang bật';
-      mfaElem.className = "badge success";
-    } else {
-      mfaElem.innerHTML = '<i class="fas fa-times"></i> Đã tắt';
-      mfaElem.className = "badge error";
-      mfaElem.style.background = "#fee2e2";
-      mfaElem.style.color = "#c53030";
+    if (mfaElem) {
+      if (savedMode === "secure") {
+        mfaElem.innerHTML = '<i class="fas fa-check"></i> Đang bật';
+        mfaElem.className = "badge success";
+      } else {
+        mfaElem.innerHTML = '<i class="fas fa-times"></i> Đã tắt';
+        mfaElem.className = "badge error";
+        mfaElem.style.background = "#fee2e2";
+        mfaElem.style.color = "#c53030";
+      }
     }
   }
 }
 
 async function fetchAdminData() {
   const tbody = document.getElementById("adminTableBody");
+  if (!tbody) return;
   try {
     const headers = {};
     const token = localStorage.getItem("auth_jwt");
@@ -319,59 +416,3 @@ document.getElementById("logoutBtn")?.addEventListener("click", async () => {
   localStorage.clear();
   window.location.href = "/";
 });
-
-document
-  .getElementById("forgotForm")
-  ?.addEventListener("submit", async function (e) {
-    e.preventDefault();
-
-    const emailInput =
-      document.getElementById("forgotEmail") ||
-      document.getElementById("forgotUsername") ||
-      document.querySelector('#forgotSection input[type="text"]');
-    const email = emailInput ? emailInput.value : "";
-
-    if (!email) {
-      showMessage(
-        '<i class="fas fa-exclamation-triangle"></i> Vui lòng nhập Email',
-        "error",
-      );
-      return;
-    }
-
-    showMessage(
-      '<i class="fas fa-spinner fa-spin"></i> Đang gửi yêu cầu...',
-      "success",
-    );
-
-    try {
-      const response = await fetch("/api/auth/password/forgot", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: email }),
-      });
-      const data = await response.json();
-
-      if (response.ok) {
-        const linkDemo = data.reset_link_demo || "#";
-        showMessage(
-          `
-          <i class="fas fa-envelope"></i> ${data.message}
-          <div style="margin-top:12px; padding:10px; background:#f3f4f6; border-left: 4px solid #e53e3e; border-radius:4px; font-size:13px; word-break: break-all; color: #333;">
-            <b>[Mô phỏng Email Nạn nhân nhận được]:</b><br>
-            <i>Hãy nhấp vào đường dẫn bên dưới để đặt lại mật khẩu:</i><br>
-            <a href="${linkDemo}" style="color:#d97706; font-weight: bold;">${linkDemo}</a>
-          </div>
-        `,
-          "success",
-        );
-      } else {
-        showMessage(
-          '<i class="fas fa-times-circle"></i> Không thể gửi yêu cầu',
-          "error",
-        );
-      }
-    } catch (error) {
-      showMessage('<i class="fas fa-wifi"></i> Lỗi kết nối mạng', "error");
-    }
-  });
