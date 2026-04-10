@@ -130,20 +130,23 @@ class VulnerableAuthService(BaseAuthService):
     def forgot_password(self, db: Session, request: ForgotPasswordRequest, http_request: Request) -> dict:
         user = self.user_repo.get_by_username(db, request.username)
         
-        # danh sách tài khoản hợp lệ qua tính năng quên mật khẩu.
+        # CWE-203: Lộ lọt thông tin người dùng
         if not user:
             raise HTTPException(status_code=404, detail="Tài khoản không tồn tại")
             
         import random
         import string
-        # CWE-330: Use of Insufficiently Random Values
-        # Mã khôi phục mật khẩu quá ngắn và dễ đoán
+        # CWE-330: Mã khôi phục quá yếu
         weak_reset_token = ''.join(random.choices(string.digits, k=6))
         self.token_repo.create_token(db, user.id, weak_reset_token, datetime.now() + timedelta(minutes=60))
   
+        # CWE-644: Host Header Injection -> Password Reset Poisoning
+        host_header = http_request.headers.get("host")
+        poisoned_link = f"http://{host_header}/reset?token={weak_reset_token}"
+        
         return {
             "message": "Email khôi phục đã được gửi", 
-            "reset_link_demo": f"http://127.0.0.1:8000/reset?token={weak_reset_token}"
+            "reset_link_demo": poisoned_link
         }
 
     def reset_password(self, db: Session, request: ResetPasswordRequest) -> dict:

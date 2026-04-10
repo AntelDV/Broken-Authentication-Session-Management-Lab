@@ -208,13 +208,16 @@ class SecureAuthService(BaseAuthService):
 
     def forgot_password(self, db: Session, request: ForgotPasswordRequest, http_request: Request) -> dict:
         user = self.user_repo.get_by_username(db, request.username)
-        # Báo cáo thành công mập mờ để chống dò tìm tài khoản 
         if not user:
             return {"message": "Nếu tài khoản tồn tại, email khôi phục sẽ được gửi."}
             
+        import secrets
+        from datetime import datetime, timedelta
         reset_token = secrets.token_urlsafe(32)
         self.token_repo.create_token(db, user.id, reset_token, datetime.now() + timedelta(minutes=15))
-        secure_link = f"http://127.0.0.1:8000/reset?token={reset_token}"
+        
+        safe_domain = "127.0.0.1:8000" 
+        secure_link = f"http://{safe_domain}/reset?token={reset_token}"
         
         return {
             "message": "Nếu tài khoản tồn tại, email khôi phục sẽ được gửi.", 
