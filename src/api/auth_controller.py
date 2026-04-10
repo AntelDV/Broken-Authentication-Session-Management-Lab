@@ -1,13 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, Response, Request
 from sqlalchemy.orm import Session
-from src.schemas.request.login_request import LoginRequest, MFAVerifyRequest, ForgotPasswordRequest, ResetPasswordRequest
+from src.schemas.request.login_request import LoginRequest, MFAVerifyRequest, ForgotPasswordRequest, ResetPasswordRequest, GoogleSSORequest
 from src.schemas.response.auth_response import AuthResponse
 from src.config.settings import settings
 from src.config.database import get_db
 
 from src.services.vulnerable_auth_service import VulnerableAuthService
 from src.services.secure_auth_service import SecureAuthService
-from src.schemas.request.login_request import GoogleSSORequest
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
@@ -28,29 +27,37 @@ def login(
     is_prod = settings.ENVIRONMENT == "production"
 
     if settings.AUTH_MODE == "secure":
-        if auth_result.session_id:
+        token_to_cookie = auth_result.temp_token if auth_result.require_mfa else auth_result.access_token
+        
+        if token_to_cookie:
             response.set_cookie(
-                key="auth_session_id", value=auth_result.session_id,
-                httponly=True, secure=is_prod, samesite="strict", max_age=900 
+                key="auth_session_id", value=token_to_cookie,
+                httponly=True, secure=is_prod, samesite="strict", max_age=900
             )
-            auth_result.session_id = "[Đã bảo mật trong HttpOnly Cookie]"
+            # Giấu đi không cho Frontend thấy để chống XSS
+            if auth_result.access_token: auth_result.access_token = "[Đã bảo mật trong HttpOnly Cookie]"
+            if auth_result.temp_token: auth_result.temp_token = "[Đã bảo mật trong HttpOnly Cookie]"
+            if auth_result.session_id: auth_result.session_id = "[Đã bảo mật trong HttpOnly Cookie]"
             
         if auth_result.remember_cookie:
             response.set_cookie(
                 key="remember_me", value=auth_result.remember_cookie,
-                httponly=True, secure=is_prod, samesite="strict", max_age=7*24*3600 
+                httponly=True, secure=is_prod, samesite="strict", max_age=7*24*3600
             )
-            auth_result.remember_cookie = "[Bảo mật: Chuỗi ngẫu nhiên an toàn]"
+            auth_result.remember_cookie = "[Bảo mật: Chuỗi ngẫu nhiên]"
     else:
-        # Ở chế độ cảnh báo: Bắt Session ID từ URL ngay từ bước đăng nhập
-        malicious_session_id = request.query_params.get("session_id")
-        if malicious_session_id:
-            auth_result.session_id = malicious_session_id
+        malicious_id_url = request.query_params.get("session_id")
+        malicious_id_cookie = request.cookies.get("auth_session_id")
+        
+        final_hacker_id = malicious_id_url if malicious_id_url else malicious_id_cookie
+        
+        if final_hacker_id:
+            auth_result.session_id = final_hacker_id
 
         if auth_result.session_id:
             response.set_cookie(
                 key="auth_session_id", value=auth_result.session_id,
-                httponly=False, secure=False, samesite="lax", max_age=31536000 
+                httponly=False, secure=False, samesite="lax", max_age=31536000
             )
         if auth_result.remember_cookie:
             response.set_cookie(
@@ -64,31 +71,81 @@ def login(
 def verify_mfa(
     request_data: MFAVerifyRequest, 
     response: Response, 
-    request: Request, # Lấy request để bắt param
+    request: Request,
     db: Session = Depends(get_db), 
     auth_service = Depends(get_auth_service)
 ):
-    result = auth_service.verify_mfa(db, request_data)
     is_prod = settings.ENVIRONMENT == "production"
-    session_id = result.get("session_id")
 
-    if settings.AUTH_MODE == "secure" and session_id:
-        response.set_cookie(
-            key="auth_session_id", value=session_id,
-            httponly=True, secure=is_prod, samesite="strict", max_age=900
-        )
-        result["session_id"] = "[Đã bảo mật trong HttpOnly Cookie]"
-    elif session_id:
-        # Ở chế độ cảnh báo: Ưu tiên xài tiếp cái Session ID mà Hacker gắn trên URL
-        malicious_session_id = request.query_params.get("session_id")
-        final_session_id = malicious_session_id if malicious_session_id else session_id
+    if settings.AUTH_MODE == "secure":
+        secure_temp_token = request.cookies.get("auth_session_id")
+        if secure_temp_token:
+            request_data.username = secure_temp_token 
+            
+    result = auth_service.verify_mfa(db, request_data)
+
+    if settings.AUTH_MODE == "secure":
+        real_access_token = result.get("access_token")
+        if real_access_token:
+            response.set_cookie(
+                key="auth_session_id", value=real_access_token,
+                httponly=True, secure=is_prod, samesite="strict", max_age=900
+            )
+            result["access_token"] = "[Đã bảo mật trong HttpOnly Cookie]"
+            result["session_id"] = "[Đã bảo mật trong HttpOnly Cookie]"
+    else:
+        malicious_id_url = request.query_params.get("session_id")
+        malicious_id_cookie = request.cookies.get("auth_session_id")
         
+        final_hacker_id = malicious_id_url if malicious_id_url else malicious_id_cookie
+        if not final_hacker_id:
+            final_hacker_id = result.get("session_id")
+            
+        result["session_id"] = final_hacker_id
         response.set_cookie(
-            key="auth_session_id", value=final_session_id,
+            key="auth_session_id", value=final_hacker_id,
             httponly=False, secure=False, samesite="lax", max_age=31536000
         )
         
     return result
+
+@router.post("/sso/google", response_model=AuthResponse)
+def google_sso_login(
+    request_data: GoogleSSORequest, 
+    response: Response,
+    request: Request,
+    db: Session = Depends(get_db), 
+    auth_service = Depends(get_auth_service)
+):
+    auth_result = auth_service.google_sso_login(db, request_data)
+    is_prod = settings.ENVIRONMENT == "production"
+
+    if settings.AUTH_MODE == "secure":
+        token_to_cookie = auth_result.temp_token if auth_result.require_mfa else auth_result.access_token
+        
+        if token_to_cookie:
+            response.set_cookie(
+                key="auth_session_id", value=token_to_cookie,
+                httponly=True, secure=is_prod, samesite="strict", max_age=900
+            )
+            if auth_result.access_token: auth_result.access_token = "[Đã bảo mật trong HttpOnly Cookie]"
+            if auth_result.temp_token: auth_result.temp_token = "[Đã bảo mật trong HttpOnly Cookie]"
+            if auth_result.session_id: auth_result.session_id = "[Đã bảo mật trong HttpOnly Cookie]"
+    else:
+        malicious_id_url = request.query_params.get("session_id")
+        malicious_id_cookie = request.cookies.get("auth_session_id")
+        final_hacker_id = malicious_id_url if malicious_id_url else malicious_id_cookie
+        
+        if final_hacker_id:
+            auth_result.session_id = final_hacker_id
+
+        if auth_result.session_id:
+            response.set_cookie(
+                key="auth_session_id", value=auth_result.session_id,
+                httponly=False, secure=False, samesite="lax", max_age=31536000
+            )
+
+    return auth_result
 
 @router.post("/mfa/setup")
 def setup_mfa(username: str, db: Session = Depends(get_db), auth_service = Depends(get_auth_service)):
@@ -106,14 +163,6 @@ def forgot_password(
 @router.post("/password/reset")
 def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db), auth_service = Depends(get_auth_service)):
     return auth_service.reset_password(db, request)
-
-@router.post("/sso/google", response_model=AuthResponse)
-def google_sso_login(
-    request: GoogleSSORequest, 
-    db: Session = Depends(get_db), 
-    auth_service = Depends(get_auth_service)
-):
-    return auth_service.google_sso_login(db, request)
 
 @router.get("/mock-google-token/{email}")
 def get_mock_google_token(email: str):

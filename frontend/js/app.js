@@ -208,7 +208,10 @@ document.getElementById("ssoBtn")?.addEventListener("click", async function () {
   try {
     const googleRes = await fetch(`/api/auth/mock-google-token/${email}`);
     const googleData = await googleRes.json();
-    const response = await fetch("/api/auth/sso/google", {
+
+    const urlParams = window.location.search;
+
+    const response = await fetch("/api/auth/sso/google" + urlParams, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
