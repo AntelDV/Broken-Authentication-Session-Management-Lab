@@ -1,7 +1,3 @@
-# Xử lý Request HTTP đầu vào cho Đăng nhập/Đăng ký.
-# Client -> Controller (nhận LoginRequest) -> Chuyển vào Service tương ứng -> Nhận AuthResponse -> Client.
-# Controller làm nhiệm vụ "điều phối" (Routing).
-# Xử lý Request HTTP đầu vào cho Đăng nhập/Đăng ký.
 from fastapi import APIRouter, Depends, HTTPException, Response, Request
 from sqlalchemy.orm import Session
 from src.schemas.request.login_request import LoginRequest, MFAVerifyRequest, ForgotPasswordRequest, ResetPasswordRequest
@@ -24,7 +20,7 @@ def get_auth_service():
 def login(
     request_data: LoginRequest, 
     response: Response, 
-    request: Request, 
+    request: Request,
     db: Session = Depends(get_db),
     auth_service = Depends(get_auth_service)
 ):
@@ -32,17 +28,11 @@ def login(
     is_prod = settings.ENVIRONMENT == "production"
 
     if settings.AUTH_MODE == "secure":
-        
-        # Luôn sử dụng Session ID mới tinh do máy chủ tự sinh ra.
         if auth_result.session_id:
             response.set_cookie(
                 key="auth_session_id", value=auth_result.session_id,
-                httponly=True,       # Chống mã độc XSS đánh cắp Cookie
-                secure=is_prod,      # Chỉ gửi qua kết nối mã hóa HTTPS
-                samesite="strict",   # Chống tấn công giả mạo yêu cầu 
-                max_age=900          # CWE-613: Insufficient Session Expiration. Ép hết hạn sau 15 phút.
+                httponly=True, secure=is_prod, samesite="strict", max_age=900 
             )
-            # Giấu ID thật đi, không cho xuất ra ngoài JSON
             auth_result.session_id = "[Đã bảo mật trong HttpOnly Cookie]"
             
         if auth_result.remember_cookie:
@@ -52,20 +42,15 @@ def login(
             )
             auth_result.remember_cookie = "[Bảo mật: Chuỗi ngẫu nhiên an toàn]"
     else:
-        
-        # CWE-384: Session Fixation.
+        # Ở chế độ cảnh báo: Bắt Session ID từ URL ngay từ bước đăng nhập
         malicious_session_id = request.query_params.get("session_id")
         if malicious_session_id:
             auth_result.session_id = malicious_session_id
 
-        # CWE-613: Insufficient Session Expiration.
         if auth_result.session_id:
             response.set_cookie(
                 key="auth_session_id", value=auth_result.session_id,
-                httponly=False,      # Để lộ Cookie cho mã độc Javascript đọc được
-                secure=False, 
-                samesite="lax", 
-                max_age=31536000     # Phiên sống tới 1 năm
+                httponly=False, secure=False, samesite="lax", max_age=31536000 
             )
         if auth_result.remember_cookie:
             response.set_cookie(
@@ -75,13 +60,15 @@ def login(
 
     return auth_result
 
-@router.post("/mfa/setup")
-def setup_mfa(username: str, db: Session = Depends(get_db), auth_service = Depends(get_auth_service)):
-    return auth_service.setup_mfa(db, username)
-
 @router.post("/mfa/verify")
-def verify_mfa(request: MFAVerifyRequest, response: Response, db: Session = Depends(get_db), auth_service = Depends(get_auth_service)):
-    result = auth_service.verify_mfa(db, request)
+def verify_mfa(
+    request_data: MFAVerifyRequest, 
+    response: Response, 
+    request: Request, # Lấy request để bắt param
+    db: Session = Depends(get_db), 
+    auth_service = Depends(get_auth_service)
+):
+    result = auth_service.verify_mfa(db, request_data)
     is_prod = settings.ENVIRONMENT == "production"
     session_id = result.get("session_id")
 
@@ -92,12 +79,20 @@ def verify_mfa(request: MFAVerifyRequest, response: Response, db: Session = Depe
         )
         result["session_id"] = "[Đã bảo mật trong HttpOnly Cookie]"
     elif session_id:
+        # Ở chế độ cảnh báo: Ưu tiên xài tiếp cái Session ID mà Hacker gắn trên URL
+        malicious_session_id = request.query_params.get("session_id")
+        final_session_id = malicious_session_id if malicious_session_id else session_id
+        
         response.set_cookie(
-            key="auth_session_id", value=session_id,
+            key="auth_session_id", value=final_session_id,
             httponly=False, secure=False, samesite="lax", max_age=31536000
         )
         
     return result
+
+@router.post("/mfa/setup")
+def setup_mfa(username: str, db: Session = Depends(get_db), auth_service = Depends(get_auth_service)):
+    return auth_service.setup_mfa(db, username)
 
 @router.post("/password/forgot")
 def forgot_password(
