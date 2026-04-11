@@ -45,13 +45,13 @@ class VulnerableAuthService(BaseAuthService):
             # Khi nhập sai, hệ thống không hề đếm số lần sai hay khóa tài khoản -> brute force vô hạn
             raise HTTPException(status_code=401, detail="Mật khẩu không chính xác")
 
-        if user.is_mfa_enabled:
-            temp_token = create_access_token(data={"sub": user.username, "scope": "mfa_pending"})
-            return AuthResponse(
-                message="Yêu cầu xác thực MFA",
-                require_mfa=True, 
-                temp_token=temp_token
-            )
+        # if user.is_mfa_enabled:
+        #     temp_token = create_access_token(data={"sub": user.username, "scope": "mfa_pending"})
+        #     return AuthResponse(
+        #         message="Yêu cầu xác thực MFA",
+        #         require_mfa=True, 
+        #         temp_token=temp_token
+        #     )
 
         access_token = create_access_token(data={"sub": user.username, "role": user.role.value})
         

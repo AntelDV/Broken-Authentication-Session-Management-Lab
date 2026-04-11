@@ -4,6 +4,8 @@ import enum
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum
 from sqlalchemy.sql import func
 from sqlalchemy.orm import declarative_base
+from sqlalchemy import ForeignKey, Text
+
 
 Base = declarative_base()
 
@@ -39,3 +41,16 @@ class User(Base):
 
     def __repr__(self):
         return f"<User(id={self.id}, username='{self.username}', role='{self.role}', is_locked={self.is_locked})>"
+    
+    
+class UserSession(Base):
+    __tablename__ = "sessions"
+
+    session_id = Column(String(255), primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    
+    user_agent = Column(Text)
+    ip_address = Column(String(45))
+    
+    issued_at = Column(DateTime(timezone=True), server_default=func.now())
+    expires_at = Column(DateTime, nullable=False)

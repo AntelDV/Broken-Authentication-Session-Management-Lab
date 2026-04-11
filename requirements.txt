@@ -12,3 +12,4 @@ cryptography
 pyotp
 requests
 psutil
+python-multipart
