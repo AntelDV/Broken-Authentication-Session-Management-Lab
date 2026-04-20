@@ -16,36 +16,22 @@ log_repo = LogRepository()
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        if request.url.path == "/api/auth/login":
-            
-            if settings.AUTH_MODE == "vulnerable":
-                # Nếu không có header này, mới dùng tạm IP thật
+        if settings.AUTH_MODE == "vulnerable":
+            if request.url.path == "/api/auth/login":
                 client_ip = request.headers.get("X-Forwarded-For", request.client.host)
-                
                 if not check_rate_limit(client_ip):
-                    return JSONResponse(
-                        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                        content={"detail": "Too Many Requests"}
-                    )
-            else:
-                # Bỏ qua mọi header giả mạo
+                    return JSONResponse(status_code=429, content={"detail": "Too Many Requests"})
+                    
+        else:
+            protected_paths = ["/api/auth/login", "/api/auth/mfa/verify", "/api/auth/sso/google", "/api/auth/password/forgot"]
+            if request.url.path in protected_paths:
                 client_ip = request.client.host
-                
                 if not check_rate_limit(client_ip):
                     db = SessionLocal()
                     try:
-                        log_repo.log_attack(
-                            db=db, 
-                            ip=client_ip, 
-                            attack_type="Brute-force (IP Bypass Failed)",
-                            request_data=f"Target API: {request.url.path} | Fake IP Tried: {request.headers.get('X-Forwarded-For', 'None')}"
-                        )
+                        log_repo.log_attack(db=db, ip=client_ip, attack_type="Rate Limit Triggered", request_data=request.url.path)
                     finally:
                         db.close()
-
-                    return JSONResponse(
-                        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                        content={"detail": "Too Many Requests. IP của bạn đã bị ghi log!"}
-                    )
+                    return JSONResponse(status_code=429, content={"detail": "Too Many Requests. IP đã bị ghi log!"})
         
         return await call_next(request)

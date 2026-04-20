@@ -15,14 +15,9 @@ class TimingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         if request.url.path == "/api/auth/login":
             start_time = time.time()
-            
-            # Cho Request chạy vào Controller xử lý bình thường
             response = await call_next(request)
-            
             process_time = time.time() - start_time
-            
             if settings.AUTH_MODE == "secure":
-                # Bù trừ thời gian sao cho tổng thời gian luôn bằng TARGET_RESPONSE_TIME
                 delay = TARGET_RESPONSE_TIME - process_time
                 if delay > 0:
                     await asyncio.sleep(delay)

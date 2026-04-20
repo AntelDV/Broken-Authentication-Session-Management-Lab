@@ -107,6 +107,8 @@ def verify_mfa(
         secure_temp_token = request.cookies.get("auth_session_id")
         if secure_temp_token:
             request_data.username = secure_temp_token 
+        elif "[Đã bảo mật" in request_data.username:
+            raise HTTPException(status_code=401, detail="Trình duyệt chặn Cookie. Vui lòng thử lại!")
             
     result = auth_service.verify_mfa(db, request_data)
 

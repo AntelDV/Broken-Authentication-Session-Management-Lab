@@ -9,6 +9,7 @@
 # 4. Session Fixation: Khi login thành công, không tạo session_id mới mà dùng lại session cũ do client gửi lên.
 # 5. Rate Limit: Bỏ qua hoàn toàn, cho phép gọi API liên tục.
 import uuid
+import time
 from datetime import datetime, timedelta
 from fastapi import HTTPException, Request
 from sqlalchemy.orm import Session
@@ -36,7 +37,8 @@ class VulnerableAuthService(BaseAuthService):
         # Trả về thông báo lỗi cụ thể giúp kẻ tấn công dò quét được tên đăng nhập nào có tồn tại.
         if not user:
             raise HTTPException(status_code=404, detail="Tài khoản không tồn tại trong hệ thống")
-
+        
+        time.sleep(0.2)
         # CWE-327: Use of a Broken or Risky Cryptographic Algorithm .
         # Hệ thống chỉ sử dụng MD5 để kiểm tra mật khẩu, dễ bị tấn công qua bảng băm \.
         if not verify_md5(request.password, user.password_hash):
@@ -45,13 +47,13 @@ class VulnerableAuthService(BaseAuthService):
             # Khi nhập sai, hệ thống không hề đếm số lần sai hay khóa tài khoản -> brute force vô hạn
             raise HTTPException(status_code=401, detail="Mật khẩu không chính xác")
 
-        # if user.is_mfa_enabled:
-        #     temp_token = create_access_token(data={"sub": user.username, "scope": "mfa_pending"})
-        #     return AuthResponse(
-        #         message="Yêu cầu xác thực MFA",
-        #         require_mfa=True, 
-        #         temp_token=temp_token
-        #     )
+        if user.is_mfa_enabled:
+            temp_token = create_access_token(data={"sub": user.username, "scope": "mfa_pending"})
+            return AuthResponse(
+                message="Yêu cầu xác thực MFA",
+                require_mfa=True, 
+                temp_token=temp_token
+            )
 
         access_token = create_access_token(data={"sub": user.username, "role": user.role.value})
         
@@ -74,6 +76,15 @@ class VulnerableAuthService(BaseAuthService):
         
         if not user:
             raise HTTPException(status_code=404, detail="Email chưa được đăng ký")
+        
+        if user.is_mfa_enabled:
+            temp_token = create_access_token(data={"sub": user.username, "scope": "mfa_pending"})
+            return AuthResponse(
+                message="Xác thực SSO thành công. Vui lòng nhập OTP để hoàn tất.",
+                require_mfa=True, 
+                temp_token=temp_token, 
+                remember_cookie=None
+            )
 
         # CWE-306: Missing Authentication for Critical Function.
         # Hệ thống bỏ qua hoàn toàn việc kiểm tra trạng thái MFA đối với luồng SSO.
