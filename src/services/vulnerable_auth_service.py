@@ -1,6 +1,3 @@
-# ==========================================
-#  VULNERABLE LOGIC 
-# ==========================================
 
 # 1. Băm mật khẩu: Gọi hàm md5() từ src/utils/hash_util.py. Không dùng Salt.
 # 2. SQL Injection: (Tùy chọn) Có thể code truy vấn DB bằng chuỗi thô (raw string) thay vì ORM.
@@ -8,6 +5,7 @@
 #    Nếu sai pass -> throw "Sai mật khẩu".
 # 4. Session Fixation: Khi login thành công, không tạo session_id mới mà dùng lại session cũ do client gửi lên.
 # 5. Rate Limit: Bỏ qua hoàn toàn, cho phép gọi API liên tục.
+
 import uuid
 import time
 from datetime import datetime, timedelta
@@ -33,18 +31,16 @@ class VulnerableAuthService(BaseAuthService):
     def login(self, db: Session, request: LoginRequest) -> AuthResponse:
         user = self.user_repo.get_by_username(db, request.username)
         
-        # CWE-203: Information Exposure Through Discrepancy.
-        # Trả về thông báo lỗi cụ thể giúp kẻ tấn công dò quét được tên đăng nhập nào có tồn tại.
+        # CWE-203: Trả về lỗi cụ thể giúp hacker dò quét User (Enumeration)
         if not user:
             raise HTTPException(status_code=404, detail="Tài khoản không tồn tại trong hệ thống")
         
+        # Giữ lại độ trễ này để tạo ra kẽ hở cho Timing Attack (Kịch bản: User tồn tại thì response chậm hơn)
         time.sleep(0.2)
-        # CWE-327: Use of a Broken or Risky Cryptographic Algorithm .
-        # Hệ thống chỉ sử dụng MD5 để kiểm tra mật khẩu, dễ bị tấn công qua bảng băm \.
-        if not verify_md5(request.password, user.password_hash):
-            
-            # CWE-307: Improper Restriction of Excessive Authentication Attempts.
-            # Khi nhập sai, hệ thống không hề đếm số lần sai hay khóa tài khoản -> brute force vô hạn
+        
+        # CWE-327: Kiểm tra mật khẩu bằng thuật toán yếu MD5
+        if not verify_md5(request.password, user.password_hash_vuln):
+            # CWE-307: Không khóa tài khoản, cho phép Brute-force vô hạn
             raise HTTPException(status_code=401, detail="Mật khẩu không chính xác")
 
         if user.is_mfa_enabled:
@@ -58,8 +54,6 @@ class VulnerableAuthService(BaseAuthService):
         access_token = create_access_token(data={"sub": user.username, "role": user.role.value})
         
         # CWE-522: Insufficiently Protected Credentials
-        # Trả JWT trực tiếp qua thân dữ liệu của JSON, dẫn đến việc ứng dụng client 
-        # lưu trữ vào LocalStorage, tạo điều kiện cho tấn công XSS đánh cắp phiên.
         return AuthResponse(
             message="Đăng nhập thành công", 
             session_id=str(uuid.uuid4()), 
@@ -139,24 +133,24 @@ class VulnerableAuthService(BaseAuthService):
         }
 
     def forgot_password(self, db: Session, request: ForgotPasswordRequest, http_request: Request) -> dict:
-        user = db.query(User).filter(User.email == request.username).first()
-        # Nếu tìm Email không ra, thì thử tìm theo Username dự phòng
-        if not user:
-            user = self.user_repo.get_by_username(db, request.username)
+        user = db.query(User).filter((User.username == request.username) | (User.email == request.username)).first()
         
-        # CWE-203: Lộ lọt thông tin người dùng
+        # CWE-203: Báo lỗi thẳng nếu không tìm thấy -> Giúp Hacker biết tài khoản này không tồn tại
         if not user:
             raise HTTPException(status_code=404, detail="Tài khoản không tồn tại")
             
         import random
         import string
-        # CWE-330: Mã khôi phục quá yếu
-        weak_reset_token = ''.join(random.choices(string.digits, k=6))
+        from datetime import datetime, timedelta
+        
+        # CWE-330: Token khôi phục quá yếu (chỉ 6 số), dễ bị Brute-force
+        weak_reset_token = "999" + ''.join(random.choices(string.digits, k=3))
         self.token_repo.create_token(db, user.id, weak_reset_token, datetime.now() + timedelta(minutes=60))
   
         # CWE-644: Host Header Injection (Password Reset Poisoning)
-        host_header = http_request.headers.get("host") 
-        poisoned_link = f"http://{host_header}/reset?token={weak_reset_token}"
+        # Lấy trực tiếp Host từ request gửi lên mà không kiểm duyệt.
+        host_header = http_request.headers.get("host", "127.0.0.1:8000") 
+        poisoned_link = f"http://{host_header}/reset.html?token={weak_reset_token}"
         
         return {
             "message": "Email khôi phục đã được gửi", 
@@ -165,15 +159,14 @@ class VulnerableAuthService(BaseAuthService):
 
     def reset_password(self, db: Session, request: ResetPasswordRequest) -> dict:
         token_record = self.token_repo.get_token(db, request.token)
-        if not token_record or token_record.is_used:
-            raise HTTPException(status_code=400, detail="Token không hợp lệ hoặc đã sử dụng")
+        if not token_record:
+            raise HTTPException(status_code=400, detail="Token không hợp lệ")
             
-        user = self.user_repo.get_by_username(db, "admin") 
-        for u in db.query(user.__class__).all():
-            if u.id == token_record.user_id: 
-                user = u
+        user = db.query(User).filter(User.id == token_record.user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="Không tìm thấy người dùng")
             
-        # CWE-327: Cập nhật mật khẩu mới nhưng vẫn băm bằng thuật toán yếu MD5.
-        user.password_hash = hash_md5(request.new_password)
-        self.token_repo.mark_used(db, token_record)
-        return {"message": "Mật khẩu đã được cập nhật"}
+        user.password_hash_vuln = hash_md5(request.new_password)
+        db.commit()
+        
+        return {"message": "Mật khẩu đã được cập nhật thành công"}

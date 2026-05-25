@@ -16,13 +16,7 @@ log_repo = LogRepository()
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        if settings.AUTH_MODE == "vulnerable":
-            if request.url.path == "/api/auth/login":
-                client_ip = request.headers.get("X-Forwarded-For", request.client.host)
-                if not check_rate_limit(client_ip):
-                    return JSONResponse(status_code=429, content={"detail": "Too Many Requests"})
-                    
-        else:
+        if settings.AUTH_MODE == "secure":
             protected_paths = ["/api/auth/login", "/api/auth/mfa/verify", "/api/auth/sso/google", "/api/auth/password/forgot"]
             if request.url.path in protected_paths:
                 client_ip = request.client.host

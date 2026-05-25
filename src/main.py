@@ -9,7 +9,7 @@ from src.api.auth_controller import router as auth_router
 from src.api.admin_controller import router as admin_router
 from src.middlewares.timing_middleware import TimingMiddleware
 from src.middlewares.rate_limit_middleware import RateLimitMiddleware
-
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 app = FastAPI(title=settings.APP_NAME)
@@ -35,6 +35,7 @@ frontend_path = os.path.join(os.getcwd(), "frontend")
 # Gắn thư mục css và js
 app.mount("/css", StaticFiles(directory=os.path.join(frontend_path, "css")), name="css")
 app.mount("/js", StaticFiles(directory=os.path.join(frontend_path, "js")), name="js")
+app.mount("/vendor", StaticFiles(directory=os.path.join(frontend_path, "vendor")), name="vendor") 
 
 # Định tuyến cho các trang HTML
 @app.get("/", include_in_schema=False)
@@ -46,6 +47,10 @@ async def read_index():
 async def read_dashboard():
     from fastapi.responses import FileResponse
     return FileResponse(os.path.join(frontend_path, "dashboard.html"))
+
+@app.get("/reset.html")
+def get_reset_page():
+    return FileResponse("frontend/reset.html")
 
 class ModeSwitchRequest(BaseModel):
     mode: str

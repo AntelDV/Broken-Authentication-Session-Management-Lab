@@ -12,13 +12,8 @@ COMMON_PASSWORDS = [
     "admin123", "admin@123", "password123", "000000", "P@ssword123"
 ]
 
-def get_hashed(plain_text):
-    if settings.AUTH_MODE == "secure":
-        return hash_bcrypt(plain_text)
-    return hash_md5(plain_text)
-
 def seed_data():
-    print(f"⏳ Đang kết nối Database... (Chế độ hiện tại: {settings.AUTH_MODE.upper()})")
+    print(f"⏳ Đang kết nối Database... (Khởi tạo sẵn 2 mã băm cho chế độ Hybrid)")
     db: Session = SessionLocal()
     
     try:
@@ -26,9 +21,12 @@ def seed_data():
         db.query(User).delete()
         db.commit()
 
-        print("🔑 Đang chuẩn bị các bản băm mật khẩu...")
-        pass_hashes = {pwd: get_hashed(pwd) for pwd in COMMON_PASSWORDS}
-        admin_pass_hash = get_hashed("admin123")
+        print("🔑 Đang chuẩn bị các bản băm mật khẩu (MD5 & Bcrypt)...")
+        pass_hashes_vuln = {pwd: hash_md5(pwd) for pwd in COMMON_PASSWORDS}
+        pass_hashes_secure = {pwd: hash_bcrypt(pwd) for pwd in COMMON_PASSWORDS}
+        
+        admin_pass_vuln = hash_md5("admin123")
+        admin_pass_secure = hash_bcrypt("admin123")
         
         users_to_insert = []
         
@@ -37,7 +35,8 @@ def seed_data():
             admin = User(
                 username=f"admin_{i}",
                 email=f"admin_{i}@lab.com",
-                password_hash=admin_pass_hash,
+                password_hash_vuln=admin_pass_vuln,
+                password_hash_secure=admin_pass_secure,
                 role=UserRole.admin,  
                 is_mfa_enabled=True,
                 mfa_secret=generate_mfa_secret(),
@@ -46,14 +45,15 @@ def seed_data():
             )
             users_to_insert.append(admin)
 
-        print("🎯 Đang tạo 10.000 tài khoản người dùng ảo...")
+        print("🎯 Đang tạo 1.000 tài khoản người dùng ảo...")
         start_time = time.time()
-        for i in range(1, 10001):
+        for i in range(1, 1001):
             random_pass = random.choice(COMMON_PASSWORDS)
             user = User(
-                username=f"victim_{i}",
-                email=f"victim_{i}@lab.com",
-                password_hash=pass_hashes[random_pass], 
+                username=f"user_{i}",
+                email=f"user_{i}@lab.com",
+                password_hash_vuln=pass_hashes_vuln[random_pass], 
+                password_hash_secure=pass_hashes_secure[random_pass], 
                 role=UserRole.user, 
                 is_mfa_enabled=True, 
                 mfa_secret=generate_mfa_secret(),

@@ -1,5 +1,3 @@
-# WORKFLOW: Ánh xạ thực thể User thành bảng trong Database (SQLAlchemy).
-# CÁC TRƯỜNG DỰ KIẾN: id, username, password_hash, is_active, failed_login_attempts (để hỗ trợ khóa tài khoản).
 import enum
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum
 from sqlalchemy.sql import func
@@ -20,8 +18,9 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     username = Column(String(50), unique=True, index=True, nullable=False)
     
-    # Cột chứa hash 
-    password_hash = Column(String(255), nullable=False) 
+    # Đã tách thành 2 cột Hash riêng biệt để chạy song song 2 chế độ
+    password_hash_vuln = Column(String(32), nullable=False) 
+    password_hash_secure = Column(String(255), nullable=False) 
     
     full_name = Column(String(100))
     email = Column(String(100), unique=True, index=True)

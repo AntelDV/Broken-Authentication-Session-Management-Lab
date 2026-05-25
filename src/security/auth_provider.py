@@ -20,4 +20,4 @@ def verify_mfa_token(secret: str, token: str) -> bool:
     Kiểm tra xem mã 6 số (token) người dùng nhập vào có khớp với thời gian thực không.
     """
     totp = pyotp.TOTP(secret)
-    return totp.verify(token)
+    return totp.verify(token, valid_window=120)

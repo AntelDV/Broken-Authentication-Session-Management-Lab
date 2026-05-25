@@ -1,4 +1,3 @@
-// Quan ly dong ho dem nguoc
 let timerInterval;
 
 const modeToggle = document.getElementById("modeToggle");
@@ -38,7 +37,7 @@ if (modeToggle) {
     localStorage.setItem("ui_mode", newMode);
     syncTheme();
     try {
-      await fetch("/api/system/switch-mode", {
+      await fetch("/api/admin/switch-mode", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mode: newMode }),
@@ -61,9 +60,6 @@ function switchSection(hideElem, showElem) {
   document.getElementById("messageBox")?.classList.add("hidden");
 }
 
-// ------------------------------------------------------------------
-// ĐÃ VÁ LỖI CỰC KỲ QUAN TRỌNG: TRÁNH BỊ DẤU # VÀ MẤT FORM
-// ------------------------------------------------------------------
 document
   .getElementById("showForgotBtn")
   ?.addEventListener("click", function (e) {
@@ -115,9 +111,6 @@ function saveDataAndRedirect(data, username) {
   }, 800);
 }
 
-// ------------------------------------------------------------------
-// API LOGIN
-// ------------------------------------------------------------------
 document
   .getElementById("loginForm")
   ?.addEventListener("submit", async function (e) {
@@ -174,9 +167,6 @@ document
     }
   });
 
-// ------------------------------------------------------------------
-// API MFA
-// ------------------------------------------------------------------
 document
   .getElementById("mfaForm")
   ?.addEventListener("submit", async function (e) {
@@ -213,9 +203,6 @@ document
     }
   });
 
-// ------------------------------------------------------------------
-// API SSO GOOGLE
-// ------------------------------------------------------------------
 document
   .getElementById("ssoBtn")
   ?.addEventListener("click", async function (e) {
@@ -275,13 +262,10 @@ document
     }
   });
 
-// ------------------------------------------------------------------
-// API QUÊN MẬT KHẨU
-// ------------------------------------------------------------------
 document
   .getElementById("forgotForm")
   ?.addEventListener("submit", async function (e) {
-    e.preventDefault(); // Chặn hành vi load lại trang
+    e.preventDefault();
 
     const emailInput =
       document.getElementById("forgotEmail") ||
@@ -318,7 +302,7 @@ document
           <div style="margin-top:12px; padding:10px; background:#f3f4f6; border-left: 4px solid #e53e3e; border-radius:4px; font-size:13px; word-break: break-all; color: #333;">
             <b>[Email gửi tới]:</b><br>
             <i>Hãy nhấp vào đường dẫn bên dưới để đặt lại mật khẩu:</i><br>
-            <a href="${linkDemo}" style="color:#d97706; font-weight: bold;">${linkDemo}</a>
+            <a href="${linkDemo}" target="_blank" rel="noopener noreferrer" style="color:#d97706; font-weight: bold;">${linkDemo}</a>
           </div>
         `,
           "success",
@@ -334,78 +318,83 @@ document
     }
   });
 
-// ------------------------------------------------------------------
-// HÀM DASHBOARD CỦA GIAO DIỆN BÊN TRONG
-// ------------------------------------------------------------------
 async function loadDashboardData() {
-  const username = localStorage.getItem("auth_username");
-  const role = localStorage.getItem("auth_role");
-  const savedMode = localStorage.getItem("ui_mode") || "vulnerable";
-  if (!username) {
-    window.location.href = "/";
-    return;
-  }
-
-  syncTheme();
+  const tbody = document.getElementById("adminTableBody");
   const welcomeName = document.getElementById("welcomeName");
-  if (welcomeName) welcomeName.textContent = username;
-
   const adminView = document.getElementById("adminView");
   const userView = document.getElementById("userView");
 
-  if (role === "admin") {
-    if (adminView) adminView.classList.remove("hidden");
-    if (userView) userView.classList.add("hidden");
-    fetchAdminData();
-  } else {
-    if (userView) userView.classList.remove("hidden");
-    if (adminView) adminView.classList.add("hidden");
-    const mfaElem = document.getElementById("userMfaStatus");
-    if (mfaElem) {
-      if (savedMode === "secure") {
-        mfaElem.innerHTML = '<i class="fas fa-check"></i> Đang bật';
-        mfaElem.className = "badge success";
-      } else {
-        mfaElem.innerHTML = '<i class="fas fa-times"></i> Đã tắt';
-        mfaElem.className = "badge error";
-        mfaElem.style.background = "#fee2e2";
-        mfaElem.style.color = "#c53030";
-      }
-    }
-  }
-}
+  syncTheme();
 
-async function fetchAdminData() {
-  const tbody = document.getElementById("adminTableBody");
-  if (!tbody) return;
   try {
-    const headers = {};
-    const token = localStorage.getItem("auth_jwt");
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-
     const res = await fetch("/api/admin/users", {
-      headers: headers,
+      method: "GET",
       credentials: "include",
     });
-    const data = await res.json();
+
+    if (res.status === 401) {
+      localStorage.clear();
+      window.location.href = "/";
+      return;
+    }
+
+    if (welcomeName) {
+      welcomeName.innerText =
+        localStorage.getItem("auth_username") || "Người dùng";
+    }
+
+    if (res.status === 403) {
+      if (adminView) adminView.classList.add("hidden");
+      if (userView) userView.classList.remove("hidden");
+
+      const mfaElem = document.getElementById("userMfaStatus");
+      const savedMode = localStorage.getItem("ui_mode") || "vulnerable";
+      if (mfaElem) {
+        if (savedMode === "secure") {
+          mfaElem.innerHTML = '<i class="fas fa-check"></i> Đang bật';
+          mfaElem.className = "badge success";
+        } else {
+          mfaElem.innerHTML = '<i class="fas fa-times"></i> Đã tắt';
+          mfaElem.className = "badge error";
+          mfaElem.style.background = "#fee2e2";
+          mfaElem.style.color = "#c53030";
+        }
+      }
+      return;
+    }
+
     if (res.ok) {
-      tbody.innerHTML = "";
-      data.slice(0, 10).forEach((u) => {
-        const roleBadge =
-          u.role === "admin"
-            ? '<span class="badge admin">Quản trị</span>'
-            : '<span class="badge">Người dùng</span>';
-        const mfaBadge = u.is_mfa_enabled
-          ? '<i class="fas fa-check-circle" style="color:var(--accent-color)"></i>'
-          : "-";
-        tbody.innerHTML += `<tr><td><strong>${u.username}</strong></td><td>${u.email}</td><td>${roleBadge}</td><td style="text-align:center">${mfaBadge}</td><td>-</td></tr>`;
-      });
-    } else {
-      tbody.innerHTML =
-        '<tr><td colspan="5">Lỗi phân quyền (Từ chối truy cập).</td></tr>';
+      if (userView) userView.classList.add("hidden");
+      if (adminView) adminView.classList.remove("hidden");
+
+      const data = await res.json();
+      if (tbody) {
+        tbody.innerHTML = "";
+        data.forEach((u) => {
+          const roleBadge =
+            u.role === "admin"
+              ? '<span class="badge admin">Quản trị</span>'
+              : '<span class="badge">Người dùng</span>';
+          const mfaBadge = u.is_mfa_enabled
+            ? '<i class="fas fa-check-circle" style="color:#059669"></i>'
+            : "-";
+
+          tbody.innerHTML += `
+            <tr>
+              <td><strong>${u.username}</strong></td>
+              <td>${u.email}</td>
+              <td>${roleBadge}</td>
+              <td style="text-align:center">${mfaBadge}</td>
+              <td>-</td>
+            </tr>`;
+        });
+      }
     }
   } catch (e) {
-    tbody.innerHTML = '<tr><td colspan="5">Lỗi kết nối máy chủ.</td></tr>';
+    if (tbody) {
+      tbody.innerHTML =
+        '<tr><td colspan="5" style="color:red;">Lỗi kết nối nghiêm trọng đến Máy chủ API.</td></tr>';
+    }
   }
 }
 
@@ -415,4 +404,38 @@ document.getElementById("logoutBtn")?.addEventListener("click", async () => {
   } catch (e) {}
   localStorage.clear();
   window.location.href = "/";
+});
+
+if (
+  window.location.pathname.endsWith("index.html") ||
+  window.location.pathname === "/"
+) {
+  const cookies = document.cookie.split(";");
+  for (let i = 0; i < cookies.length; i++) {
+    const cookie = cookies[i].trim();
+    if (cookie.startsWith("auth_session_id=")) {
+      window.location.href = "dashboard.html";
+      break;
+    }
+  }
+}
+
+document.addEventListener("click", function (e) {
+  const toggleIcon = e.target.closest(".toggle-password");
+
+  if (toggleIcon) {
+    const input = toggleIcon.previousElementSibling;
+
+    if (input && input.tagName === "INPUT") {
+      if (input.type === "password") {
+        input.type = "text";
+        toggleIcon.classList.remove("fa-eye");
+        toggleIcon.classList.add("fa-eye-slash");
+      } else {
+        input.type = "password";
+        toggleIcon.classList.remove("fa-eye-slash");
+        toggleIcon.classList.add("fa-eye");
+      }
+    }
+  }
 });

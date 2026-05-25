@@ -28,76 +28,71 @@ class SecureAuthService(BaseAuthService):
         self.token_repo = TokenRepository()
 
     def login(self, db: Session, request: LoginRequest) -> AuthResponse:
-        # Bấm giờ để tính toán thời gian phản hồi, chống Timing Attack
-        start_time = time.time() 
-        
         user = self.user_repo.get_by_username(db, request.username)
         
-        # Dùng chung 1 thông báo để hacker không biết là sai User hay sai pass
+        # Dùng chung 1 thông báo để hacker không biết là sai User hay sai Pass
         generic_error = HTTPException(status_code=401, detail="Tài khoản hoặc mật khẩu không chính xác")
 
-        try:
-            # Chặn ngay nếu tài khoản không tồn tại hoặc đã bị khóa trước đó
-            if not user or user.is_locked: 
-                raise generic_error
-                
-            is_pass_valid = False
-            try:
-                # Ưu tiên check bằng Bcrypt 
-                is_pass_valid = verify_bcrypt(request.password, user.password_hash)
-            except UnknownHashError:
-                # Tương thích ngược nếu văng lỗi tức là DB cũ dùng MD5
-                # Vẫn cho check bằng MD5 để user cũ không bị lỗi đăng nhập
-                is_pass_valid = verify_md5(request.password, user.password_hash)
-
-            # Nếu nhập sai Pass
-            if not is_pass_valid:
-                # Ép Database tự cộng dồn bằng Atomic Update thay vì cộng bằng code Python
-                # Dù 1000 requests tới cùng lúc thì DB vẫn xếp hàng cộng đúng, không bị sập
-                db.execute(
-                    update(User).where(User.id == user.id).values(
-                        failed_login_attempts=User.failed_login_attempts + 1,
-                        is_locked=(User.failed_login_attempts + 1 >= 5)
-                    )
-                )
-                db.commit()
-                raise generic_error
-                
-            # Đăng nhập đúng thì reset số lần sai về 0 cho sạch sẽ
-            if user.failed_login_attempts > 0:
-                self.user_repo.update_failed_attempts(db, user, 0, False)
-
-            # Tạo cookie ghi nhớ an toàn 
-            remember_cookie = secrets.token_urlsafe(64) if request.remember_me else None
-
-            # Đăng nhập đúng pass vẫn chưa cho vào, bắt xác thực điện thoại
-            if user.is_mfa_enabled:
-                # Cấp 1 cái token để qua vòng gửi xe
-                mfa_temp_token = create_access_token(data={"sub": user.username, "scope": "mfa_pending"})
-                return AuthResponse(
-                    message="Vui lòng nhập mã bảo mật để hoàn tất",
-                    require_mfa=True, 
-                    temp_token=mfa_temp_token, 
-                    remember_cookie=remember_cookie
-                )
-
-            # Vượt qua mọi rào cản thì cấp JWT 
-            access_token = create_access_token(data={"sub": user.username, "role": user.role.value})
-            return AuthResponse(
-                message="Đăng nhập thành công", 
-                session_id=str(uuid.uuid4()), 
-                role=user.role.value, 
-                remember_cookie=remember_cookie, 
-                access_token=access_token, 
-                token_type="bearer"
-            )
+        # Chặn ngay nếu tài khoản không tồn tại hoặc đã bị khóa 
+        if not user or user.is_locked: 
+            raise generic_error
             
-        finally:
-            # Dù chạy nhanh cỡ nào cũng bắt Server ngủ đông đủ 0.5 giây
-            # Hacker đo thời gian sẽ thấy mọi request đều mất đúng 0.5s, không dò được gì
-            elapsed = time.time() - start_time
-            if elapsed < 0.5:
-                time.sleep(0.5 - elapsed)
+        # Trỏ đúng vào cột Bcrypt (Bỏ cơ chế fallback MD5 cũ gây lỗi)
+        is_pass_valid = verify_bcrypt(request.password, user.password_hash_secure)
+
+        # Nếu nhập sai Pass
+        if not is_pass_valid:
+            db.execute(
+                update(User).where(User.id == user.id).values(
+                    failed_login_attempts=User.failed_login_attempts + 1,
+                    is_locked=(User.failed_login_attempts + 1 >= 5)
+                )
+            )
+            db.commit()
+            raise generic_error
+            
+        # Đăng nhập đúng thì reset số lần sai về 0
+        if user.failed_login_attempts > 0:
+            self.user_repo.update_failed_attempts(db, user, 0, False)
+
+        remember_cookie = secrets.token_urlsafe(64) if request.remember_me else None
+
+        # Yêu cầu xác thực điện thoại (2FA)
+        if user.is_mfa_enabled:
+            mfa_temp_token = create_access_token(data={"sub": user.username, "scope": "mfa_pending"})
+            return AuthResponse(
+                message="Vui lòng nhập mã bảo mật để hoàn tất",
+                require_mfa=True, 
+                temp_token=mfa_temp_token, 
+                remember_cookie=remember_cookie
+            )
+
+        access_token = create_access_token(data={"sub": user.username, "role": user.role.value})
+        return AuthResponse(
+            message="Đăng nhập thành công", 
+            session_id=str(uuid.uuid4()), 
+            role=user.role.value, 
+            remember_cookie=remember_cookie, 
+            access_token=access_token, 
+            token_type="bearer"
+        )
+        
+        # Sinh một UUID ngắn gọn làm Session ID thực sự lưu dưới DB
+        new_session_id = str(uuid.uuid4())
+        
+        # Nhét cái Session ID đó vào trong bụng của JWT
+        access_token = create_access_token(
+            data={"sub": user.username, "role": user.role.value, "session_id": new_session_id}
+        )
+        
+        return AuthResponse(
+            message="Đăng nhập thành công", 
+            session_id=new_session_id, # Trả về UUID, không phải JWT khổng lồ
+            role=user.role.value, 
+            remember_cookie=remember_cookie, 
+            access_token=access_token, 
+            token_type="bearer"
+        )
     
 
     def google_sso_login(self, db: Session, request: GoogleSSORequest) -> AuthResponse:
@@ -207,32 +202,48 @@ class SecureAuthService(BaseAuthService):
         }
 
     def forgot_password(self, db: Session, request: ForgotPasswordRequest, http_request: Request) -> dict:
-        user = self.user_repo.get_by_username(db, request.username)
+        # Tìm User theo Username hoặc Email
+        user = db.query(User).filter((User.username == request.username) | (User.email == request.username)).first()
+        
+        # Dù có tìm thấy User hay không, vẫn trả về 1 câu thông báo y hệt nhau.
         if not user:
-            return {"message": "Nếu tài khoản tồn tại, email khôi phục sẽ được gửi."}
+            return {"message": "Nếu tài khoản tồn tại, email khôi phục sẽ được gửi an toàn."}
             
         import secrets
         from datetime import datetime, timedelta
+        
+        # Token siêu mạnh, không thể Brute-force
         reset_token = secrets.token_urlsafe(32)
         self.token_repo.create_token(db, user.id, reset_token, datetime.now() + timedelta(minutes=15))
         
+        # Fix cứng Domain tĩnh từ cấu hình. 
         safe_domain = "127.0.0.1:8000" 
-        secure_link = f"http://{safe_domain}/reset?token={reset_token}"
+        secure_link = f"http://{safe_domain}/reset.html?token={reset_token}"
         
         return {
-            "message": "Nếu tài khoản tồn tại, email khôi phục sẽ được gửi.", 
+            "message": "Nếu tài khoản tồn tại, email khôi phục sẽ được gửi an toàn.", 
             "reset_link_demo": secure_link
         }
 
     def reset_password(self, db: Session, request: ResetPasswordRequest) -> dict:
         token_record = self.token_repo.get_token(db, request.token)
+        
+        # Kiểm tra token có tồn tại, còn hạn và chưa bị sử dụng hay không
         if not token_record or token_record.is_used or datetime.now() > token_record.expires_at:
             raise HTTPException(status_code=400, detail="Token không hợp lệ hoặc đã hết hạn.")
             
-        user = self.user_repo.get_by_username(db, "admin") 
-        for u in db.query(user.__class__).all():
-            if u.id == token_record.user_id: user = u
+        # Truy vấn thẳng vào ID, bỏ vòng lặp for quét cả Database
+        user = db.query(User).filter(User.id == token_record.user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="Không tìm thấy người dùng")
             
-        user.password_hash = hash_bcrypt(request.new_password)
+        # Cập nhật bằng thuật toán mạnh (Bcrypt) vào đúng cột secure
+        user.password_hash_secure = hash_bcrypt(request.new_password)
+        
+        # VĐánh dấu Token đã sử dụng ngay lập tức
         self.token_repo.mark_used(db, token_record)
+        db.commit()
+        
         return {"message": "Mật khẩu đã được đặt lại thành công!"}
+
+ 

@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Đặt lại mật khẩu mới</title>
+    <link rel="stylesheet" href="vendor/fontawesome/css/all.min.css" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body class="theme-vulnerable">
+    <div class="top-bar">
+      <div class="brand">
+        <i class="fas fa-university"></i> Đặt lại mật khẩu mới
+      </div>
+    </div>
+
+    <div class="container fade-in">
+      <div id="resetSection">
+        <h2>Thiết lập mật khẩu mới</h2>
+        <p class="subtitle">
+          Vui lòng nhập mật khẩu mới bảo mật hơn cho tài khoản của bạn
+        </p>
+
+        <form id="resetForm">
+          <input type="hidden" id="resetToken" name="token" />
+
+          <div class="input-group">
+            <label><i class="fas fa-lock"></i> Mật khẩu mới</label>
+
+            <div class="password-wrapper">
+              <input
+                type="password"
+                id="newPassword"
+                placeholder="Nhập mật khẩu mới"
+                required
+                autocomplete="new-password"
+              />
+              <i class="fas fa-eye toggle-password" title="Hiện mật khẩu"></i>
+            </div>
+            <ul
+              id="password-reqs"
+              style="
+                list-style: none;
+                margin-top: 12px;
+                padding: 15px;
+                background: #f8fafc;
+                border-radius: 8px;
+                font-size: 14px;
+                color: var(--text-muted);
+                border: 1px solid var(--border-color);
+              "
+            >
+              <li id="req-length" style="margin-bottom: 6px; transition: 0.3s">
+                <i class="fas fa-times-circle" style="width: 20px"></i> Tối
+                thiểu 8 ký tự
+              </li>
+              <li id="req-upper" style="margin-bottom: 6px; transition: 0.3s">
+                <i class="fas fa-times-circle" style="width: 20px"></i> Ít nhất
+                1 chữ IN HOA
+              </li>
+              <li id="req-lower" style="margin-bottom: 6px; transition: 0.3s">
+                <i class="fas fa-times-circle" style="width: 20px"></i> Ít nhất
+                1 chữ thường
+              </li>
+              <li id="req-num" style="margin-bottom: 6px; transition: 0.3s">
+                <i class="fas fa-times-circle" style="width: 20px"></i> Ít nhất
+                1 chữ số
+              </li>
+              <li id="req-spec" style="transition: 0.3s">
+                <i class="fas fa-times-circle" style="width: 20px"></i> Ít nhất
+                1 ký tự đặc biệt (@$!%*?&)
+              </li>
+            </ul>
+          </div>
+
+          <div class="input-group">
+            <label
+              ><i class="fas fa-check-double"></i> Xác nhận mật khẩu mới</label
+            >
+
+            <div class="password-wrapper">
+              <input
+                type="password"
+                id="confirmPassword"
+                placeholder="Nhập lại mật khẩu mới"
+                required
+                autocomplete="new-password"
+              />
+              <i class="fas fa-eye toggle-password" title="Hiện mật khẩu"></i>
+            </div>
+          </div>
+
+          <button type="submit" class="btn-primary" id="submitResetBtn">
+            <i class="fas fa-save"></i> Lưu thay đổi
+          </button>
+        </form>
+      </div>
+
+      <div id="messageBox" class="message hidden"></div>
+    </div>
+    </div> <script src="js/app.js"></script>
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        const savedMode = localStorage.getItem("ui_mode") || "vulnerable";
+        if (savedMode === "secure") {
+          document.body.classList.remove("theme-vulnerable");
+          document.body.classList.add("theme-secure");
+          document.querySelector(".brand").innerHTML =
+            '<i class="fas fa-shield-check"></i> Đặt lại mật khẩu an toàn';
+        }
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const token = urlParams.get("token");
+        const messageBox = document.getElementById("messageBox");
+
+        if (token) {
+          document.getElementById("resetToken").value = token;
+        } else {
+          messageBox.textContent =
+            "Lỗi: Mã khôi phục không tồn tại hoặc đã hết hạn.";
+          messageBox.className = "message error";
+          messageBox.classList.remove("hidden");
+          document.getElementById("submitResetBtn").disabled = true;
+        }
+
+        document
+          .getElementById("resetForm")
+          .addEventListener("submit", async function (e) {
+            e.preventDefault();
+
+            const tokenVal = document.getElementById("resetToken").value;
+            const newPassword = document.getElementById("newPassword").value;
+            const confirmPassword =
+              document.getElementById("confirmPassword").value;
+
+            if (!isPasswordStrong) {
+              messageBox.textContent =
+                "Vui lòng hoàn thiện các yêu cầu bảo mật của mật khẩu!";
+              messageBox.className = "message error";
+              messageBox.classList.remove("hidden");
+              return;
+            }
+
+            try {
+              const response = await fetch("/api/auth/password/reset", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  token: tokenVal,
+                  new_password: newPassword,
+                }),
+              });
+
+              const result = await response.json();
+
+              if (response.ok) {
+                messageBox.textContent =
+                  "Đổi mật khẩu thành công! Tự động quay lại trang đăng nhập sau 3 giây...";
+                messageBox.className = "message success";
+                messageBox.classList.remove("hidden");
+
+                setTimeout(() => {
+                  window.location.href = "/";
+                }, 3000);
+              } else {
+                messageBox.textContent =
+                  result.detail || "Có lỗi xảy ra, vui lòng thử lại.";
+                messageBox.className = "message error";
+                messageBox.classList.remove("hidden");
+              }
+            } catch (error) {
+              messageBox.textContent = "Không thể kết nối đến máy chủ!";
+              messageBox.className = "message error";
+              messageBox.classList.remove("hidden");
+            }
+          });
+      });
+
+      const passInput = document.getElementById("newPassword");
+      const reqs = {
+        length: { elem: document.getElementById("req-length"), regex: /.{8,}/ },
+        upper: { elem: document.getElementById("req-upper"), regex: /[A-Z]/ },
+        lower: { elem: document.getElementById("req-lower"), regex: /[a-z]/ },
+        num: { elem: document.getElementById("req-num"), regex: /[0-9]/ },
+        spec: { elem: document.getElementById("req-spec"), regex: /[@$!%*?&]/ },
+      };
+
+      let isPasswordStrong = false;
+
+      passInput.addEventListener("input", function () {
+        const val = passInput.value;
+        let validCount = 0;
+
+        for (const key in reqs) {
+          const isValid = reqs[key].regex.test(val);
+          const li = reqs[key].elem;
+          const icon = li.querySelector("i");
+
+          if (isValid) {
+            li.style.color = "#059669";
+            li.style.fontWeight = "bold";
+            icon.classList.remove("fa-times-circle");
+            icon.classList.add("fa-check-circle");
+            validCount++;
+          } else {
+            li.style.color = "var(--text-muted)";
+            li.style.fontWeight = "normal";
+            icon.classList.remove("fa-check-circle");
+            icon.classList.add("fa-times-circle");
+          }
+        }
+
+        isPasswordStrong = validCount === 5;
+      });
+    </script>
+  </body>
+</html>

@@ -506,3 +506,25 @@ body.theme-secure code,
 body.theme-secure pre {
   color: #059669;
 }
+
+.password-wrapper {
+  position: relative;
+  display: block;
+}
+.password-wrapper input {
+  padding-right: 45px !important;
+}
+.toggle-password {
+  position: absolute;
+  right: 15px;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 18px;
+  transition: color 0.2s;
+  z-index: 10;
+}
+.toggle-password:hover {
+  color: var(--accent-color);
+}
